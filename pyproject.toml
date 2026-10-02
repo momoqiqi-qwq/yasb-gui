@@ -44,7 +44,7 @@ dependencies = [
 
 [project.optional-dependencies]
 build = [
-    "cx-freeze==8.6.4",
+    "cx-freeze==8.7.1",
 ]
 dev = [
     "ruff>=0.15.0",
