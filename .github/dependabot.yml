@@ -7,8 +7,6 @@ updates:
       day: "monday"
       time: "12:00"
       timezone: "Etc/UTC"
-    assignees:
-      - "amnweb"
     groups:
       winrt:
         patterns:

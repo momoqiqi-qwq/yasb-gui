@@ -1,224 +1,51 @@
-# YASB GUI
+# YASB GUI 中文增强版
 
-<p align="center">
-  <img src="assets/promo.jpg" alt="YASB GUI" width="100%">
-</p>
+基于 [amnweb/yasb-gui](https://github.com/amnweb/yasb-gui) 的 WinUI 3 配置器，增加简体中文、版本适配和完整字段编辑。保留上游 MIT 许可与版权；上游说明见 [README.upstream.md](README.upstream.md)。
 
-> **Project Discontinued:** Development and maintenance of YASB GUI have stopped due to lack of time. This app is outdated and no longer supported. Please refer to the official [YASB documentation](https://github.com/amnweb/yasb) for configuring your status bar instead.
+## 下载与运行
 
-**YASB GUI** is a native configuration application for [YASB Reborn](https://github.com/amnweb/yasb) (Yet Another Status Bar). Built with WinUI 3, it provides a modern interface for managing your status bar configuration without manually editing YAML files.
+前往本仓库 [Releases](https://github.com/momoqiqi-qwq/yasb-gui/releases)，下载目标版本的 `YASB-GUI-版本号-x64-portable.zip`，解压后运行 `ygui.exe`。
 
-> **Note:** This application is currently in **beta**. Some features may be incomplete or subject to change. Please report any issues on the [GitHub Issues](https://github.com/amnweb/yasb-gui/issues) page.
+请保留整个解压目录的 `lib`、`app`、`assets` 和 DLL 文件。Release 中单独提供的 EXE 需要同版本完整包的依赖文件，不能跨版本混用。每个版本分别提供 SHA256 校验文件，旧版本不会被覆盖。
 
-**Why a separate repository?** 
-- YASB GUI is maintained separately from YASB for several reasons:
-- Built with WinUI 3, which requires Windows App SDK dependencies not needed by YASB itself
-- Keeps YASB lightweight and focused on its core functionality without GUI framework bloat
-- Allows independent development cycles and easier maintenance for both projects
-- Users who prefer manual YAML editing don't need to install unnecessary GUI dependencies
+运行环境为 Windows x64，并需要可用的 Windows App SDK Runtime 与 WebView2 Runtime。可执行文件为本地构建的未签名版本。
 
----
+## 功能
 
-<p align="center">
-  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg"></a>
-  <a href="https://github.com/amnweb/yasb-gui"><img src="https://img.shields.io/github/languages/top/amnweb/yasb-gui"></a>
-  <a href="https://github.com/amnweb/yasb-gui/issues"><img src="https://img.shields.io/github/issues/amnweb/yasb-gui?label=Issues"></a>
-  <a href="https://github.com/amnweb/yasb-gui/releases"><img src="https://img.shields.io/github/downloads/amnweb/yasb-gui/total?label=Total%20Downloads"></a>
-  <a href="https://github.com/amnweb/yasb-gui/releases/latest"><img src="https://img.shields.io/github/v/release/amnweb/yasb-gui?label=Latest%20Release"></a>
-  <a href="https://discord.gg/qkeunvBFgX" title="Discord"><img alt="Discord" src="https://img.shields.io/discord/1353495377768218654?label=Discord&cacheSeconds=600"></a>
-</p>
+- 简体中文界面、组件名称、设置字段和 Monaco 编辑器命令。
+- 目标规则可选择 YASB 2.0.6、2.0.7 与内置开发分支快照。
+- 正式版 57 种组件、开发快照 59 种组件的目录、默认配置与完整字段表单。
+- 全局、状态栏和组件的高级 YAML 编辑。
+- 命令文本、JSON 数据和快捷键三个自定义组件模板。
+- 保存前检查官方字段兼容性，保留中文与自定义字段的值。
 
----
+`style: adaptive` 与 `style_adaptive_exclude` 仅属于开发分支快照，2.0.7 正式版不支持。
 
-## Features
+## 版本与已知限制
 
-**Visual Configuration Editor**
-- Edit bars, widgets, and global settings through an intuitive interface
-- Monaco-based code editor with YAML syntax highlighting and validation
-- Real-time schema validation for configuration files
+- `v0.0.7`：已有本地中文增强构建的独立归档。
+- `v0.1.0`：发布版本，更新版本号、仓库链接、构建与测试工作流。
 
-**Widget Management**
-- Add, remove, and configure widgets with a visual editor
-- Support for all YASB widget types
-- Widget-specific settings panels
+本次发布尚未实施结构审查提出的优化。CSS 保存的异步状态、空文本保存、切页草稿保留、原子写入、YAML 注释保留和 schema 缓存一致性仍需后续修复。CSS 格式化还可能改变字符串内的连续空格。建议编辑前导出配置备份。
 
-**Styles Editor**
-- Built-in CSS editor for customizing your status bar appearance
-- Syntax highlighting and auto-completion
+本发行渠道提供便携包；原有应用内 MSIX 安装更新流程不适用于这些 ZIP，请通过 Releases 手动下载新版本到独立目录。
 
-**Environment Variables**
-- Manage environment variables used by YASB
-- Easy key-value editing interface
+## 源码运行与构建
 
-**Application Settings**
-- Light, Dark, and System theme support
-- Multiple backdrop options: Mica, Mica Alt, and Acrylic
-- Multi-language support
+需要 Python 3.14 和 Windows。
 
-**Safety Features**
-- Export configuration as ZIP backup
-- Unsaved changes detection with confirmation dialogs
-- Configuration validation before save
-
----
-
-## System Requirements
-
-| Component | Requirement |
-|-----------|-------------|
-| Operating System | Windows 10 (Build 17763+) or Windows 11 |
-| Runtime | [Windows App SDK Runtime](https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/downloads) |
-| WebView | Microsoft Edge WebView2 Runtime (included with Windows 10/11) |
-
----
-
-## Installation
-
-Download the latest release from the [Releases](https://github.com/amnweb/yasb-gui/releases) page.
-
-### Add a widget using a docs snippet (how it actually works)
-1) Go to **Widgets** → **Add Widget**.
-2) Pick the widget from the built-in list.
-3) In the **Options** editor, paste only the options block from the docs-not the outer `widgets:` list. Real example (Weather widget) with nested options and indentation kept:
-```yaml
-label: "<span>{icon}</span> {temp}"
-label_alt: "{location}: Min {min_temp}, Max {max_temp}"
-api_key: "YOUR_API_KEY"
-show_alerts: true
-tooltip: true
-update_interval: 600
-hide_decimal: true
-units: metric
-menu:
-  blur: true
-  round_corners: true
-  round_corners_type: normal
-  border_color: system
-  alignment: center
-  direction: down
-  offset_top: 6
-  offset_left: 0
-icons:
-  sunnyDay: "\ue30d"
-  clearNight: "\ue32b"
-  cloudyDay: "\ue312"
-  cloudyNight: "\ue311"
-  rainyDay: "\ue318"
-  rainyNight: "\ue318"
-  snowyIcy: "\ue31a"
-  default: "\ue137"
-callbacks:
-  on_left: toggle_menu
-```
-4) Save the widget, then hit **Apply** so YASB reloads the updated config.
-
-> **Tips**
->
-> Copy only the options section from the docs and paste it into the Options editor; the widget type is already set by your selection.
->
-> If indentation looks off, right-click in the editor and choose **Fix indentation** from the context menu.
-
----
-
-## Configuration
-
-The application reads and writes YASB configuration from:
-- `~/.config/yasb/config.yaml`
-- `~/.config/yasb/styles.css`
-
-To use a custom location, set the `YASB_CONFIG_HOME` environment variable.
-
----
-
-## Contributing Translations
-
-YASB GUI supports multiple languages. Translation files are located in `app/core/locales/`.
-
-**To add a new language:**
-1. Copy `en.json` and rename it using the language code (e.g., `fr.json` for French)
-2. Update `_language_name` and `_language_code` at the top of the file
-3. Translate all string values while keeping the keys unchanged
-4. Do not modify placeholders (e.g., `{variable}`) within the strings
-5. Do not chnage the JSON structure
-6. Submit a pull request
-
----
-
-## Building from Source
-
-### Development Setup
-```bash
-git clone https://github.com/amnweb/yasb-gui.git
-cd yasb-gui
-pip install -e .
-python app/main.py
-```
-
-### Building Executable
-```bash
-pip install .[build]
-python app/scripts/build.py build
-```
-The executable will be created in the `dist/` directory.
-
-### Building MSIX Package
-After building the executable, you can create an MSIX package:
-```bash
-python app/scripts/build_msix.py
-```
-The MSIX will be created in the `msix/` directory.
-
-**Options:**
-- `--arch x64|aarch64` - Target architecture (default: x64)
-- `--output <path>` - Output directory for MSIX
-
-### Local Development (Unsigned MSIX)
-For local testing without code signing, register the package in development mode:
 ```powershell
-# Register the package (runs from extracted layout, not the .msix file)
-Add-AppxPackage -Path "msix/layout/AppxManifest.xml" -Register
-
-# Launch the app
-Start-Process "shell:AppsFolder\YASB.GUI_wbnnev551gwxy!App"
-
-# Uninstall when done
-Get-AppxPackage -Name "YASB.GUI" | Remove-AppxPackage
+python -m venv .venv
+.venv/Scripts/python.exe -m pip install -e ".[dev,build]"
+.venv/Scripts/python.exe -m pytest -q
+.venv/Scripts/ruff.exe check app
+.venv/Scripts/python.exe app/scripts/build.py build
+.venv/Scripts/python.exe app/scripts/package_release.py 0.1.0
 ```
 
-### Local Signing (Optional)
-To test with a signed MSIX locally, create a self-signed certificate:
-```powershell
-# Create a self-signed certificate (run once)
-$cert = New-SelfSignedCertificate -Type Custom -Subject "CN=YourName" `
-  -KeyUsage DigitalSignature -FriendlyName "YASB GUI Dev" `
-  -CertStoreLocation "Cert:\CurrentUser\My" `
-  -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3")
+源码启动：`run.cmd`。构建输出：`dist/ygui.exe`。发布附件：`release-files/0.1.0/`。打包脚本不会覆盖已存在的版本附件。
 
-# Export to PFX (set a password)
-$pwd = ConvertTo-SecureString -String "YourPassword" -Force -AsPlainText
-Export-PfxCertificate -Cert $cert -FilePath "dev-cert.pfx" -Password $pwd
+构建和测试工作流模板保存在 `docs/workflow-templates/`。当前上传凭据缺少 GitHub 的 workflow 权限，因此模板尚未启用；获得该权限后，可将模板移入 `.github/workflows/`。本次 EXE 和完整包已在 Windows 本地构建和验证，正式 Release 按独立 Git 标签发布，保留旧标签与附件。
 
-# Trust the certificate (required to install signed packages)
-Import-Certificate -FilePath (Export-Certificate -Cert $cert -FilePath "dev-cert.cer") `
-  -CertStoreLocation "Cert:\LocalMachine\TrustedPeople"
+详细修改见 [CHANGES-zh_CN.md](CHANGES-zh_CN.md)。
 
-# Sign the MSIX
-& "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\signtool.exe" sign `
-  /fd SHA256 /a /f "dev-cert.pfx" /p "YourPassword" "msix\yasb-gui-0.0.2-x64.msix"
-
-# Install the signed MSIX
-Add-AppxPackage -Path "msix\yasb-gui-0.0.2-x64.msix"
-```
-
-> **Note:** Update the Publisher in `build_msix.py` to match your certificate's CN if signing locally.
-
----
-
-## Support the Project
-
-If you find YASB GUI useful, consider supporting its development:
-
-[![GitHub Sponsors](https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?logo=github)](https://github.com/sponsors/amnweb)
-[![Ko-fi](https://img.shields.io/badge/Support-Ko--fi-ff5e5b?logo=ko-fi)](https://ko-fi.com/amnweb)
-
-Your support helps maintain and improve the project.

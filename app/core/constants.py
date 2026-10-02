@@ -5,15 +5,15 @@ import sys
 from pathlib import Path
 
 # Application metadata
-APP_VERSION = "0.0.7"
+APP_VERSION = "0.1.0"
 DEFAULT_SETTINGS = {"language": "zh_CN", "theme": "default", "backdrop": "mica"}
 
 # External URLs
 YASB_SITE = "https://yasb.dev"
 GITHUB_YASB = "https://github.com/amnweb/yasb"
-GITHUB_YASB_GUI = "https://github.com/amnweb/yasb-gui"
+GITHUB_YASB_GUI = "https://github.com/momoqiqi-qwq/yasb-gui"
 GITHUB_REGISTRY = "https://raw.githubusercontent.com/amnweb/yasb-gui-registry/main/registry.json"
-GITHUB_RELEASES_API = "https://api.github.com/repos/amnweb/yasb-gui/releases"
+GITHUB_RELEASES_API = "https://api.github.com/repos/momoqiqi-qwq/yasb-gui/releases"
 
 # Update settings
 UPDATE_CHECK_INTERVAL_MINUTES = 60
