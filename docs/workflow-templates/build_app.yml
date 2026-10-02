@@ -1,0 +1,297 @@
+name: Build and Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: '3.14'
+  APP_ID: 'YASB.GUI_wbnnev551gwxy'
+
+jobs:
+  build:
+    permissions:
+      contents: write
+      actions: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: windows-latest
+            suffix: x64
+          - arch: arm64
+            runner: windows-11-arm
+            suffix: aarch64
+
+    runs-on: ${{ matrix.runner }}
+    name: Build (${{ matrix.arch }})
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m venv venv
+          .\venv\Scripts\Activate
+          pip install --upgrade pip
+          pip install .[build] --no-cache
+        shell: pwsh
+
+      - name: Build application
+        run: |
+          .\venv\Scripts\Activate
+          python app/scripts/build.py build
+        shell: pwsh
+
+      - name: Upload unsigned dist
+        id: upload_unsigned_dist
+        uses: actions/upload-artifact@v7
+        with:
+          name: unsigned-dist-${{ matrix.suffix }}
+          path: dist/
+
+      - name: Sign EXE with SignPath
+        id: sign
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: '${{ secrets.SIGN_TOKEN }}'
+          organization-id: '${{ secrets.SIGNPATH_ORG_ID }}'
+          project-slug: 'yasb-gui'
+          signing-policy-slug: '${{ secrets.SIGN_POLICY_SLUG }}'
+          artifact-configuration-slug: 'release-signing-gui'
+          github-artifact-id: '${{ steps.upload_unsigned_dist.outputs.artifact-id }}'
+          wait-for-completion: 'true'
+          output-artifact-directory: 'signed'
+
+      - name: Replace unsigned EXE with signed
+        if: steps.sign.outcome == 'success'
+        run: |
+          $signedDir = 'signed'
+          if (-not (Test-Path $signedDir)) {
+            Write-Error "Signed directory not found"; exit 1
+          }
+          $signedFiles = Get-ChildItem -Path $signedDir -File -Filter '*.exe' -Recurse -ErrorAction SilentlyContinue
+          if ($null -eq $signedFiles -or $signedFiles.Count -eq 0) {
+            Write-Error "No signed .exe files found in $signedDir"; exit 1
+          }
+          foreach ($f in $signedFiles) {
+            Write-Host "  $($f.Name) ($([math]::Round($f.Length/1MB, 2)) MB)"
+            Copy-Item -Path $f.FullName -Destination (Join-Path 'dist' $f.Name) -Force
+          }
+          try {
+            Get-ChildItem -Path $signedDir -Recurse -Force | Remove-Item -Force -Recurse
+          } catch {
+            Write-Warning "Failed to clean up ${signedDir}: $($_.Exception.Message)"
+          }
+        shell: pwsh
+
+      - name: Upload signed dist
+        uses: actions/upload-artifact@v7
+        with:
+          name: signed-dist-${{ matrix.suffix }}
+          path: dist/
+          retention-days: 1
+
+      - name: Delete unsigned artifacts
+        uses: geekyeggo/delete-artifact@v5
+        with:
+          name: unsigned-dist-${{ matrix.suffix }}
+          failOnError: false
+
+  release:
+    needs: build
+    runs-on: windows-latest
+    permissions:
+      contents: write
+      actions: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m venv venv
+          .\venv\Scripts\Activate
+          pip install --upgrade pip
+          pip install .[build] --no-cache
+        shell: pwsh
+
+      - name: Get version
+        id: version
+        run: |
+          $content = Get-Content -Path 'app/core/constants.py' -Raw
+          $version = [regex]::Match($content, 'APP_VERSION\s*=\s*"([^"]+)"').Groups[1].Value
+          echo "VERSION=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          Write-Host "Version: $version"
+        shell: pwsh
+
+      - name: Download signed dist artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: signed-dist-*
+          path: signed-dists
+          merge-multiple: false
+
+      - name: Build MSIX for x64
+        run: |
+          .\venv\Scripts\Activate
+          if (Test-Path dist) { Remove-Item -Recurse -Force dist }
+          Copy-Item -Recurse signed-dists/signed-dist-x64 dist
+          python app/scripts/build_msix.py --arch x64
+          New-Item -ItemType Directory -Path msix-all -Force
+          Move-Item msix/*.msix msix-all/
+        shell: pwsh
+
+      - name: Build MSIX for arm64
+        run: |
+          .\venv\Scripts\Activate
+          if (Test-Path dist) { Remove-Item -Recurse -Force dist }
+          Copy-Item -Recurse signed-dists/signed-dist-aarch64 dist
+          python app/scripts/build_msix.py --arch aarch64
+          Move-Item msix/*.msix msix-all/
+        shell: pwsh
+
+      - name: Create MSIX bundle
+        run: |
+          .\venv\Scripts\Activate
+          if (Test-Path msix) { Remove-Item -Recurse -Force msix }
+          Rename-Item msix-all msix
+          $msixFiles = Get-ChildItem msix/*.msix | ForEach-Object { $_.FullName }
+          python app/scripts/build_msix.py --bundle --msix-files $msixFiles
+          Write-Host "Bundle created:"
+          Get-ChildItem msix/*.msixbundle
+        shell: pwsh
+
+      - name: Upload unsigned bundle
+        id: upload_unsigned_bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: unsigned-bundle
+          path: msix/*.msixbundle
+
+      - name: Sign MSIX bundle with SignPath
+        id: sign_bundle
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: '${{ secrets.SIGN_TOKEN }}'
+          organization-id: '${{ secrets.SIGNPATH_ORG_ID }}'
+          project-slug: 'yasb-gui'
+          signing-policy-slug: '${{ secrets.SIGN_POLICY_SLUG }}'
+          artifact-configuration-slug: 'signing-installer-msix'
+          github-artifact-id: '${{ steps.upload_unsigned_bundle.outputs.artifact-id }}'
+          wait-for-completion: 'true'
+          output-artifact-directory: 'signed-bundle'
+
+      - name: Replace unsigned bundle with signed
+        if: steps.sign_bundle.outcome == 'success'
+        run: |
+          $signedDir = 'signed-bundle'
+          if (-not (Test-Path $signedDir)) {
+            Write-Error "Signed bundle directory not found"; exit 1
+          }
+          $signedFiles = Get-ChildItem -Path $signedDir -File -Filter '*.msixbundle' -Recurse -ErrorAction SilentlyContinue
+          if ($null -eq $signedFiles -or $signedFiles.Count -eq 0) {
+            Write-Error "No signed .msixbundle found"; exit 1
+          }
+          foreach ($f in $signedFiles) {
+            Write-Host "Signed: $($f.Name) ($([math]::Round($f.Length/1MB, 2)) MB)"
+            Copy-Item -Path $f.FullName -Destination (Join-Path 'msix' $f.Name) -Force
+          }
+          try {
+            Get-ChildItem -Path $signedDir -Recurse -Force | Remove-Item -Force -Recurse
+          } catch {
+            Write-Warning "Failed to clean up ${signedDir}: $($_.Exception.Message)"
+          }
+        shell: pwsh
+
+      - name: Create portable ZIPs
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          $version = $env:VERSION
+          New-Item -ItemType Directory -Path release-files -Force
+          foreach ($suffix in @('x64', 'aarch64')) {
+            $srcDir = "signed-dists/signed-dist-$suffix"
+            $zipName = "release-files/YASB.GUI_${version}_${suffix}.zip"
+            Compress-Archive -Path "$srcDir/*" -DestinationPath $zipName -Force
+            Write-Host "Created: $zipName"
+          }
+        shell: pwsh
+
+      - name: Move bundle to release files
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+          APP_ID: ${{ env.APP_ID }}
+        run: |
+          $version = $env:VERSION
+          $publisherId = ($env:APP_ID -split '_')[1]
+          $bundleName = "YASB.GUI_${version}_${publisherId}.msixbundle"
+          Copy-Item "msix/$bundleName" "release-files/$bundleName" -Force
+          Write-Host "Bundle: $bundleName"
+        shell: pwsh
+
+      - name: Generate checksums
+        run: |
+          $checksums = Get-FileHash release-files/* -Algorithm SHA256
+          $output = @()
+          foreach ($c in $checksums) {
+            $output += "$($c.Hash)  $([System.IO.Path]::GetFileName($c.Path))"
+          }
+          $output -join "`n" | Out-File -FilePath release-files/checksums.txt -Encoding utf8
+          Write-Host "Checksums:"
+          Get-Content release-files/checksums.txt
+        shell: pwsh
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          $prevTag = git tag -l --sort=-version:refname | Where-Object { $_ -match '^v\d+\.\d+\.\d+$' } | Select-Object -First 1
+          if (-not [string]::IsNullOrWhiteSpace($prevTag)) {
+            $commits = git log "$prevTag..HEAD" --pretty=format:"* %s %h" --no-merges
+          } else {
+            $commits = git log -n 20 --pretty=format:"* %s %h" --no-merges
+          }
+          if ([string]::IsNullOrWhiteSpace($commits)) { $commits = "* No significant changes" }
+          $commits | Out-File -FilePath CHANGELOG.md -Encoding utf8
+          "body<<EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          $commits | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+        shell: pwsh
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2.5.0
+        with:
+          tag_name: v${{ steps.version.outputs.VERSION }}
+          name: 'YASB GUI v${{ steps.version.outputs.VERSION }} (Beta)'
+          body: ${{ steps.changelog.outputs.body }}
+          draft: true
+          prerelease: false
+          files: release-files/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Delete temporary artifacts
+        if: always()
+        uses: geekyeggo/delete-artifact@v5
+        with:
+          name: |
+            signed-dist-*
+            unsigned-bundle
+          failOnError: false
