@@ -22,7 +22,7 @@ from core.constants import WEBVIEW_CACHE_DIR
 from core.editor.editor_context_menu import monaco_context_menu
 from core.localization import t
 from core.logger import error, warning
-from core.preferences import get_preferences
+from core.preferences import editor_options, get_preferences
 from core.ui_errors import display_error
 from core.widget_helpers import (
     delete_disabled_widget,
@@ -804,6 +804,7 @@ class WidgetsPage:
                         "focus": True,
                         "elapsedMs": int(elapsed * 1000),
                         "minTotalMs": 1000,
+                        "editorOptions": editor_options(),
                     }
                     webview.execute_script_async(f"initEditor({json.dumps(init_options)})")
                 except Exception as e:

@@ -244,6 +244,7 @@
                 },
                 contextmenu: false
             });
+            window.editor = editor;
 
             // Hide find widget buttons via CSS after editor is created
             const style = document.createElement('style');
@@ -334,6 +335,12 @@
                 }
             });
 
+            editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, function() {
+                if (currentLanguage === 'css' && window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage({type: 'save', content: editor.getValue()});
+                }
+            });
+
             // Notify host that editor is ready
             if (window.chrome && window.chrome.webview) {
                 window.chrome.webview.postMessage({ type: 'ready' });
@@ -406,11 +413,20 @@
 
         function setFont(fontFamily, fontSize) {
             if (editor) {
-                editor.updateOptions({
-                    fontFamily: fontFamily || 'Cascadia Code, Consolas, monospace',
-                    fontSize: fontSize || 14
-                });
+                const options = {};
+                if (fontFamily) options.fontFamily = fontFamily;
+                if (fontSize) options.fontSize = fontSize;
+                editor.updateOptions(options);
             }
+        }
+
+        function setEditorOptions(options) {
+            if (!editor) return;
+            editor.updateOptions(options);
+            editor.getModel().updateOptions({
+                tabSize: currentLanguage === 'yaml' ? 2 : options.tabSize,
+                insertSpaces: true
+            });
         }
 
         function initEditor(options) {
@@ -421,6 +437,7 @@
             if (options.theme) setTheme(options.theme);
             if (options.language) setLanguage(options.language);
             if (options.fontFamily || options.fontSize) setFont(options.fontFamily, options.fontSize);
+            if (options.editorOptions) setEditorOptions(options.editorOptions);
             if (options.content !== undefined) setContent(options.content);
             if (options.focus) editor.focus();
             
@@ -450,9 +467,11 @@
         window.fixIndentation = fixIndentation;  // Expose globally for context menu
 
         function setFormattedContent(content) {
-            if (editor && content) {
+            if (editor && typeof content === 'string') {
                 const pos = editor.getPosition();
-                editor.setValue(content);
+                editor.pushUndoStop();
+                editor.executeEdits('format', [{range: editor.getModel().getFullModelRange(), text: content}]);
+                editor.pushUndoStop();
                 if (pos) editor.setPosition(pos);
             }
         }

@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://momoqiqi-qwq.github.io/yasb-gui/sitemap.xml

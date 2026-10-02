@@ -15,7 +15,7 @@ from core.constants import WEBVIEW_CACHE_DIR
 from core.editor.editor_context_menu import monaco_context_menu
 from core.localization import t
 from core.logger import error
-from core.preferences import get_preferences
+from core.preferences import editor_options, get_preferences
 from ui.controls import UIFactory
 from ui.loader import load_xaml
 from webview2.microsoft.web.webview2.core import CoreWebView2Environment
@@ -37,6 +37,8 @@ class StylesPage:
         self._editor_ready = False
         self._pending_content = None
         self._loader_start_time = None
+        self._page = None
+        self._draft_content = None
 
     def _create_icon(self, glyph_entity):
         xaml = f'''<FontIcon xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -46,6 +48,10 @@ class StylesPage:
     def show(self):
         """Display styles editor page."""
         try:
+            if self._page is not None:
+                self._app._content_area.content = self._page
+                self._app.apply_editor_options()
+                return
             page = XamlReader.load(load_xaml("pages/StylesPage.xaml")).as_(Page)
             content = page.content.as_(FrameworkElement)
 
@@ -59,9 +65,13 @@ class StylesPage:
             open_btn = self._ui.create_button(t("common_open_editor"))
             open_btn.add_click(lambda s, e: subprocess.Popen(["notepad", self._config_manager.styles_path]))
             header_panel.children.append(open_btn)
+            reload_btn = self._ui.create_button(t("styles_reload"))
+            reload_btn.add_click(lambda s, e: self.reload_from_disk())
+            header_panel.children.append(reload_btn)
 
             css_content = self._config_manager.load_styles()
             self._pending_content = css_content
+            self._draft_content = css_content
 
             prefs = get_preferences()
             self._editor_font = prefs.get("editor_font", "Cascadia Code") if prefs else "Cascadia Code"
@@ -86,6 +96,7 @@ class StylesPage:
             self._init_webview()
 
             self._app._content_area.content = page
+            self._page = page
         except Exception as e:
             error(f"Styles page error: {e}", exc_info=True)
 
@@ -120,38 +131,7 @@ class StylesPage:
                     (
                         t("common_format_css"),
                         "&#xE943;",  # AlignLeft icon
-                        """if(window.editor){
-                            var css = editor.getValue();
-                            var formatted = '';
-                            var indent = 0;
-                            var inRule = false;
-                            
-                            // Remove existing formatting
-                            css = css.replace(/\\s+/g, ' ').trim();
-                            
-                            for (var i = 0; i < css.length; i++) {
-                                var c = css[i];
-                                if (c === '{') {
-                                    formatted += ' {\\n' + '  '.repeat(indent + 1);
-                                    indent++;
-                                    inRule = true;
-                                } else if (c === '}') {
-                                    indent--;
-                                    formatted = formatted.trimEnd() + '\\n' + '  '.repeat(indent) + '}\\n' + (indent === 0 ? '\\n' : '');
-                                    inRule = false;
-                                } else if (c === ';' && inRule) {
-                                    formatted += ';\\n' + '  '.repeat(indent);
-                                } else if (c === ',' && !inRule) {
-                                    // Multiple selectors - put each on new line
-                                    formatted += ',\\n';
-                                } else if (c === ' ' && (formatted.endsWith('\\n' + '  '.repeat(indent)) || formatted.endsWith(',\\n'))) {
-                                    // Skip leading space after newline
-                                } else {
-                                    formatted += c;
-                                }
-                            }
-                            editor.setValue(formatted.trim());
-                        }""",
+                        "if(window.editor){editor.getAction('editor.action.formatDocument').run();}",
                     ),
                     (
                         t("common_cleanup_css"),
@@ -190,7 +170,12 @@ class StylesPage:
                 self._webview.visibility = Visibility.VISIBLE
             elif msg.get("type") == "contentChanged":
                 content = msg.get("content", "")
+                self._draft_content = content
                 self._app.mark_unsaved("styles", current_styles=content)
+            elif msg.get("type") == "save":
+                self._draft_content = msg.get("content", "")
+                self._app.mark_unsaved("styles", current_styles=self._draft_content)
+                self._app._save_config()
         except Exception as e:
             error(f"Web message error: {e}")
 
@@ -209,6 +194,7 @@ class StylesPage:
                 "focus": True,
                 "elapsedMs": elapsed_ms,
                 "minTotalMs": 1000,
+                "editorOptions": editor_options(),
             }
 
             js_options = json.dumps(init_options)
@@ -218,6 +204,34 @@ class StylesPage:
             self._app._styles_webview = self._webview
         except Exception as e:
             error(f"Init editor content error: {e}")
+
+    def reload_from_disk(self):
+        """Explicitly reload external edits; keep in-session drafts until confirmed."""
+        if not self._editor_ready:
+            return
+
+        def reload():
+            try:
+                content = self._config_manager.load_styles()
+                self._draft_content = content
+                self._webview.execute_script_async(f"setContent({json.dumps(content)})")
+                self._app.mark_unsaved("styles", current_styles=content)
+            except Exception as exc:
+                self._app._show_save_error(str(exc))
+
+        if not self._app._unsaved_styles:
+            reload()
+            return
+        dialog = self._app.create_dialog(
+            '<ContentDialog xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" '
+            f'Title="{UIFactory.escape_xml(t("styles_reload"))}" '
+            f'PrimaryButtonText="{UIFactory.escape_xml(t("styles_reload"))}" '
+            f'CloseButtonText="{UIFactory.escape_xml(t("common_cancel"))}" DefaultButton="Close">'
+            f'<TextBlock Text="{UIFactory.escape_xml(t("styles_reload_confirm"))}" TextWrapping="Wrap"/>'
+            "</ContentDialog>"
+        )
+        dialog.add_closed(lambda s, e: reload() if e.result == ContentDialogButton.PRIMARY else None)
+        dialog.show_async()
 
     async def get_content(self):
         """Get CSS content from Monaco editor."""

@@ -5,8 +5,21 @@ import sys
 from pathlib import Path
 
 # Application metadata
-APP_VERSION = "0.1.0"
-DEFAULT_SETTINGS = {"language": "zh_CN", "theme": "default", "backdrop": "mica"}
+APP_VERSION = "0.2.0"
+DEFAULT_SETTINGS = {
+    "language": "zh_CN",
+    "theme": "default",
+    "backdrop": "mica",
+    "startup_page": "global",
+    "backup_before_save": True,
+    "backup_retention": 10,
+    "editor_word_wrap": "on",
+    "editor_minimap": False,
+    "editor_line_numbers": "on",
+    "editor_tab_size": 2,
+    "editor_render_whitespace": "selection",
+    "editor_bracket_colors": True,
+}
 
 # External URLs
 YASB_SITE = "https://yasb.dev"

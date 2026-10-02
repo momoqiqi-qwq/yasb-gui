@@ -7,6 +7,7 @@ import datetime
 import os
 import platform
 import sys
+from importlib.util import find_spec
 from pathlib import Path
 
 from cx_Freeze import Executable, setup
@@ -43,6 +44,15 @@ def main():
     # Avoid reading project-root metadata (pyproject.toml) by building from the script directory.
     os.chdir(SCRIPT_DIR)
 
+    # This dependency enumerates its bundled meta-schemas through importlib.resources.
+    # cx_Freeze does not automatically collect those data files into library.zip.
+    specifications = find_spec("jsonschema_specifications")
+    if specifications is None or specifications.origin is None:
+        raise RuntimeError("jsonschema_specifications is required to build the application")
+    specifications_schemas = Path(specifications.origin).parent / "schemas"
+    if not specifications_schemas.is_dir():
+        raise RuntimeError(f"Missing JSON Schema specification resources: {specifications_schemas}")
+
     build_options = {
         "includes": [
             "winui3.microsoft.ui.composition.systembackdrops",
@@ -62,6 +72,7 @@ def main():
         ],
         "excludes": ["tkinter", "unittest", "pydoc", "test", "tests", "pytest"],
         "include_files": [
+            (str(specifications_schemas), "lib/jsonschema_specifications/schemas/"),
             (str(APP_DIR / "core" / "schemas"), "lib/core/schemas/"),
             (str(APP_DIR / "core" / "locales"), "lib/core/locales/"),
             (str(APP_DIR / "core" / "editor"), "lib/core/editor/"),
@@ -69,6 +80,7 @@ def main():
             (str(ASSETS_DIR / "app.ico"), "assets/app.ico"),
         ],
         "zip_exclude_packages": [
+            "jsonschema_specifications",
             "core",
             "webview2",
         ],
@@ -79,6 +91,14 @@ def main():
         "silent_level": 1,
         "silent": True,
         "include_msvcr": True,
+        # Keep local build paths out of public bytecode and tracebacks.
+        "replace_paths": [
+            (str(APP_DIR), "app"),
+            (str(Path(sys.prefix) / "Lib" / "site-packages"), "packages"),
+            (str(PROJECT_ROOT), "YASB-GUI"),
+            (str(Path(sys.base_prefix)), "python"),
+            ("*", ""),
+        ],
         "optimize": 2,
     }
 

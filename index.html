@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YASB GUI 中文增强版 · 让状态栏配置更顺手</title>
+  <meta name="description" content="YASB GUI 中文增强版是一款 Windows 上的 YASB 配置器。使用中文表单编辑状态栏和组件，自定义 CSS 样式，并通过保存前备份保护配置。提供完整便携包与三个自定义组件模板。">
+  <meta name="theme-color" content="#2850d9">
+  <link rel="canonical" href="https://momoqiqi-qwq.github.io/yasb-gui/">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="zh_CN">
+  <meta property="og:title" content="YASB GUI 中文增强版 · 让状态栏配置更顺手">
+  <meta property="og:description" content="中文表单、CSS 编辑、自定义组件模板与保存前备份。为你的 Windows 状态栏，留出更多调整空间。">
+  <meta property="og:url" content="https://momoqiqi-qwq.github.io/yasb-gui/">
+  <link rel="icon" href="assets/app.ico">
+  <link rel="stylesheet" href="website/site.css">
+  <script src="website/site.js" defer></script>
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"SoftwareApplication","name":"YASB GUI 中文增强版","applicationCategory":"UtilitiesApplication","operatingSystem":"Windows x64","softwareVersion":"0.2.0","license":"https://opensource.org/license/mit","url":"https://momoqiqi-qwq.github.io/yasb-gui/","downloadUrl":"https://github.com/momoqiqi-qwq/yasb-gui/releases/download/v0.2.0/YASB-GUI-0.2.0-x64-portable.zip","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到正文</a>
+  <header class="site-header wrap">
+    <a class="brand" href="#" aria-label="YASB GUI 中文增强版首页"><img src="assets/app.ico" alt="" width="32" height="32"><span>YASB GUI<small>中文增强版</small></span></a>
+    <nav aria-label="主要导航"><a href="#features">功能</a><a href="#custom">自定义组件</a><a href="#start">开始使用</a><a class="repo-link" href="https://github.com/momoqiqi-qwq/yasb-gui">GitHub <span aria-hidden="true">↗</span></a></nav>
+  </header>
+  <main id="main">
+    <section class="hero wrap" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <a class="release-note" href="https://github.com/momoqiqi-qwq/yasb-gui/releases/tag/v0.2.0"><span class="release-dot" aria-hidden="true"></span>v0.2.0 · 编辑与保存体验更新 <span aria-hidden="true">→</span></a>
+        <h1 id="hero-title">把状态栏，<br>调成你的样子。</h1>
+        <p class="hero-lead">用中文配置 YASB。<br>组件、布局、样式，从这里慢慢调好。</p>
+        <p class="hero-detail">表单编辑与 YAML 各取所需；CSS 切页保留草稿，保存前自动留下备份。</p>
+        <div class="hero-actions"><a class="button primary" href="https://github.com/momoqiqi-qwq/yasb-gui/releases/download/v0.2.0/YASB-GUI-0.2.0-x64-portable.zip">下载完整便携包 <span aria-hidden="true">↓</span></a><a class="button plain" href="#start">查看使用步骤 <span aria-hidden="true">→</span></a></div>
+        <p class="download-meta">Windows x64 · MIT 开源 · 免费使用</p>
+      </div>
+      <div class="preview-area">
+        <div class="bar-preview" aria-label="状态栏外观示意"><span class="bar-launch">⊞</span><span class="bar-workspaces"><b>1</b><span>2</span><span>3</span></span><span class="bar-center">你的工作空间</span><span class="bar-right">◉ <span>72%</span> <time>09:41</time></span></div>
+        <div class="app-preview">
+          <div class="app-titlebar"><span><img src="assets/app.ico" alt="" width="17" height="17">YASB GUI</span><span class="window-symbols" aria-hidden="true">— &nbsp; □ &nbsp; ×</span></div>
+          <div class="preview-layout">
+            <div class="preview-tabs" role="tablist" aria-label="切换界面示意" aria-orientation="vertical">
+              <button role="tab" id="tab-config" aria-controls="panel-config" aria-selected="true" tabindex="0"><span aria-hidden="true">⚙</span>配置编辑</button>
+              <button role="tab" id="tab-style" aria-controls="panel-style" aria-selected="false" tabindex="-1"><span aria-hidden="true">{ }</span>样式调整</button>
+              <button role="tab" id="tab-custom" aria-controls="panel-custom" aria-selected="false" tabindex="-1"><span aria-hidden="true">＋</span>自定义组件</button>
+              <span class="preview-sidebar-bottom">v0.2.0</span>
+            </div>
+            <section class="preview-panel" id="panel-config" role="tabpanel" aria-labelledby="tab-config" tabindex="0">
+              <h2>状态栏设置</h2><p>把常用调整，放进看得懂的表单。</p>
+              <div class="form-row"><span>显示位置</span><span class="mock-select">屏幕顶部 <i aria-hidden="true">⌄</i></span></div>
+              <div class="form-row"><span>状态栏高度</span><span class="mock-number">30 <small>px</small></span></div>
+              <div class="form-row"><span>保存前自动备份</span><span class="mock-toggle" role="img" aria-label="示意：已开启"></span></div>
+              <div class="preview-tip"><span aria-hidden="true">↳</span><span>需要更多选项？<br>切换到高级 YAML 编辑。</span></div>
+              <div class="preview-save"><span>编辑完成后统一保存</span><span class="mock-save">保存</span></div>
+            </section>
+            <section class="preview-panel" id="panel-style" role="tabpanel" aria-labelledby="tab-style" tabindex="0" hidden>
+              <h2>样式编辑</h2><p>换一种配色，留住当前的编辑进度。</p>
+              <pre class="code-preview"><code><span class="code-comment">/* 一点自己的风格 */</span>
+<span class="code-selector">.yasb-bar</span> {
+  <span class="code-property">background</span>: #f5f8ff;
+  <span class="code-property">border-radius</span>: 8px;
+}
+<span class="code-selector">.clock-widget</span> {
+  <span class="code-property">color</span>: #2850d9;
+}</code></pre>
+              <div class="preview-save"><span>草稿随切页保留</span><kbd>Ctrl + S</kbd></div>
+            </section>
+            <section class="preview-panel" id="panel-custom" role="tabpanel" aria-labelledby="tab-custom" tabindex="0" hidden>
+              <h2>自己的小组件</h2><p>让脚本输出，在状态栏上有个位置。</p>
+              <div class="custom-preview"><span class="custom-icon" aria-hidden="true">⌁</span><div><strong>今日摘要</strong><span>示例：待办 3 项 · 专注 90 分钟</span></div></div>
+              <pre class="code-preview compact"><code>type: yasb.custom.CustomWidget
+options:
+  label: "{data[message]}"
+  exec_options:
+    return_format: "json"</code></pre>
+              <p class="mock-caveat">需配套脚本提供数据。</p>
+            </section>
+          </div>
+        </div>
+        <p class="preview-caption">交互界面示意 · 实际界面以软件为准</p>
+      </div>
+    </section>
+    <div class="compatibility wrap"><span>适配你正在使用的 YASB</span><div><span>2.0.6</span><span>2.0.7</span><span>内置开发快照</span></div><small>配置器需搭配 YASB 本体使用</small></div>
+    <section class="features wrap" id="features" aria-labelledby="features-title">
+      <div class="section-heading"><h2 id="features-title">配置这件事，<br>可以更顺手。</h2><p>保留直接编写配置的自由，<br>也让日常调整少一点反复。</p></div>
+      <div class="feature-columns">
+        <article><span class="feature-icon" aria-hidden="true">文</span><h3>中文表单，逐项调整</h3><p>状态栏、组件和常用字段都有中文说明。按目标 YASB 版本校验，正式版规则包含 57 种组件，内置开发快照包含 59 种。</p><a href="#custom">从已有组件到自定义 <span aria-hidden="true">→</span></a></article>
+        <article><span class="feature-icon code-icon" aria-hidden="true">{ }</span><h3>表单与代码，各取所需</h3><p>全局、状态栏和组件支持高级 YAML 编辑。CSS 编辑器可调整字号、换行、行号与缩进；切页保留本次运行中的草稿和撤销历史。</p><a href="https://github.com/momoqiqi-qwq/yasb-gui/blob/main/docs/experience-review.md">查看编辑体验说明 <span aria-hidden="true">→</span></a></article>
+        <article><span class="feature-icon" aria-hidden="true">↶</span><h3>修改之前，留一份旧的</h3><p>保存前默认备份旧配置或旧样式，并限制备份数量。原子写入减少半写入文件，保存失败时继续保留未保存提示。</p><a href="#release">了解本次更新 <span aria-hidden="true">→</span></a></article>
+      </div>
+    </section>
+    <section class="custom-section" id="custom" aria-labelledby="custom-title"><div class="wrap custom-layout">
+      <div><h2 id="custom-title">官方组件之外，<br>给你的脚本留个位置。</h2><p>三个现成模板，是自定义功能的起点。<br>数据从哪里来、点击之后做什么，由你决定。</p><a class="button dark" href="https://github.com/momoqiqi-qwq/yasb-gui/blob/main/app/core/writing_templates.py">查看模板源码 <span aria-hidden="true">↗</span></a></div>
+      <div class="template-list"><article><span aria-hidden="true">›_</span><div><h3>命令文本</h3><p>将命令输出显示为文字，例如倒计时、Git 分支或脚本状态。</p></div></article><article><span aria-hidden="true">{ }</span><div><h3>JSON 数据</h3><p>读取结构化输出，组合成课程提醒、任务摘要等信息；需自行接入数据。</p></div></article><article><span aria-hidden="true">⌘</span><div><h3>快捷键与点击动作</h3><p>为组件绑定命令，打开应用、目录，或执行常用操作。</p></div></article><p class="template-note">需要独立布局或复杂弹窗？可在 YASB 本体中编写 Python 组件。本配置器负责编辑配置，不会自动生成组件实现。</p></div>
+    </div></section>
+    <section class="release-section wrap" id="release" aria-labelledby="release-title"><div class="release-heading"><h2 id="release-title">v0.2.0 更新</h2><a href="https://github.com/momoqiqi-qwq/yasb-gui/releases/tag/v0.2.0">完整更新记录 <span aria-hidden="true">↗</span></a></div><div class="release-layout"><div class="release-summary"><strong>更多设置，<br>更稳妥的保存。</strong><p>9 项新设置，把编辑习惯交还给你。</p></div><ul class="release-items"><li><b>编辑器</b><span>自动换行、代码缩略图、行号、CSS 缩进、空白字符、括号着色。</span></li><li><b>工作流程</b><span>启动页面、保存前自动备份、备份保留数量。</span></li><li><b>体验修复</b><span>空 CSS 保存、异步保存状态、切页草稿、右键菜单，以及清缓存保留偏好。</span></li></ul></div></section>
+    <section class="start-section wrap" id="start" aria-labelledby="start-title"><div class="section-heading"><h2 id="start-title">从完整便携包开始。</h2><p>先准备 YASB，再打开配置器。</p></div><ol class="start-steps"><li><span class="step-number">1</span><div><h3>准备运行环境</h3><p>Windows x64，已安装并配置 YASB。本机需要 Windows App SDK Runtime 与 WebView2 Runtime。</p></div></li><li><span class="step-number">2</span><div><h3>下载并解压完整 ZIP</h3><p>保留 lib、app、assets 和 DLL 文件。请勿只复制 EXE，或混用不同版本的依赖。</p></div></li><li><span class="step-number">3</span><div><h3>运行 ygui.exe</h3><p>选择与 YASB 本体匹配的目标版本，调整配置后保存。更新时解压到新的独立目录。</p></div></li></ol><div class="start-actions"><a class="button primary" href="https://github.com/momoqiqi-qwq/yasb-gui/releases/download/v0.2.0/YASB-GUI-0.2.0-x64-portable.zip">下载 v0.2.0 完整包 <span aria-hidden="true">↓</span></a><a href="https://github.com/momoqiqi-qwq/yasb-gui/releases/download/v0.2.0/YASB-GUI-0.2.0-SHA256SUMS.txt">SHA256 校验文件</a><span>便携版本地构建，未签名</span></div></section>
+    <section class="faq wrap" aria-labelledby="faq-title"><h2 id="faq-title">使用前，你可能想知道</h2><details><summary>这是 YASB 本体吗？</summary><p>这是 YASB 的图形配置器，用来编辑状态栏配置和样式。状态栏与组件的实际运行由 YASB 本体负责。</p></details><details><summary>会覆盖我已经选择的应用设置吗？</summary><p>已有语言、主题和自定义设置键会保留。新设置补充默认值；备份数量限制按配置目录和文件分别计算。</p></details><details><summary>草稿能在重启后恢复吗？</summary><p>当前只保留本次运行中的 CSS 草稿。跨重启恢复、外部文件冲突检测和多文件联合保存仍是后续优化项，请在退出前保存修改。</p></details><details><summary>开发快照和正式版有什么区别？</summary><p>选择 2.0.6 或 2.0.7 可使用对应正式版配置规则。开发快照提供额外字段；例如 adaptive 样式不属于 2.0.7 正式版。内置快照不代表始终同步远端开发分支。</p></details></section>
+  </main>
+  <footer class="site-footer wrap"><div><a class="brand" href="#">YASB GUI</a><p>基于 amnweb/yasb-gui 的中文增强版。<br>保留上游 MIT 许可与版权。</p></div><div class="footer-links"><a href="https://github.com/momoqiqi-qwq/yasb-gui">项目仓库</a><a href="https://github.com/momoqiqi-qwq/yasb-gui/issues">反馈问题</a><a href="https://github.com/amnweb/yasb-gui">上游项目</a><a href="https://github.com/momoqiqi-qwq/yasb-gui/blob/main/LICENSE">MIT 许可</a></div></footer>
+</body>
+</html>

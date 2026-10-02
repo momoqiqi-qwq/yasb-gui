@@ -14,7 +14,6 @@ import webbrowser
 from datetime import datetime
 
 from core.constants import (
-    APP_DATA_DIR,
     APP_ICON,
     APP_VERSION,
     GITHUB_YASB,
@@ -225,6 +224,8 @@ class AppSettingsPage:
             editor_expander = self._create_editor_settings_expander()
             main_panel.children.append(editor_expander)
 
+            main_panel.children.append(self._create_workflow_settings_expander())
+
             # Widget Schema Database card
             schema_card = self._create_schema_update_card()
             main_panel.children.append(schema_card)
@@ -257,8 +258,9 @@ class AppSettingsPage:
 
         if icon_el:
             icon_el.glyph = icon
-        title_el.text = UIFactory.escape_xml(title)
-        desc_el.text = UIFactory.escape_xml(description)
+        title_el.text = title
+        desc_el.text = description
+        desc_el.text_wrapping = 2
         container.children.append(control)
         return card
 
@@ -387,6 +389,76 @@ class AppSettingsPage:
         font_selector.add_selection_changed(self._on_font_changed)
         font_size_selector.add_selection_changed(self._on_font_size_changed)
 
+        for key, choices in (
+            ("editor_word_wrap", [("on", "setting_on"), ("off", "setting_off")]),
+            ("editor_minimap", [(False, "setting_off"), (True, "setting_on")]),
+            ("editor_line_numbers", [("on", "setting_on"), ("relative", "setting_relative"), ("off", "setting_off")]),
+            ("editor_tab_size", [(2, "setting_spaces_2"), (4, "setting_spaces_4"), (8, "setting_spaces_8")]),
+            (
+                "editor_render_whitespace",
+                [("none", "setting_off"), ("selection", "setting_selection"), ("all", "setting_all")],
+            ),
+            ("editor_bracket_colors", [(True, "setting_on"), (False, "setting_off")]),
+        ):
+            content_panel.children.append(self._preference_card(key, choices, editor=True))
+
+        return expander
+
+    def _preference_card(self, key, choices, editor=False):
+        """Persist a choice only after the user changes it."""
+        selector = self._ui.create_simple_combobox()
+        for value, label in choices:
+            selector.items.append(self._ui.create_combobox_item(t(label), str(value)))
+        values = [value for value, label in choices]
+        current = self._prefs.get(key)
+        selector.selected_index = values.index(current) if current in values else 0
+
+        def changed(sender, args):
+            index = selector.selected_index
+            if 0 <= index < len(values):
+                self._prefs.set(key, values[index])
+                if editor:
+                    self._app.apply_editor_options()
+
+        selector.add_selection_changed(changed)
+        return self._create_settings_card("\ue713", t("settings_" + key), t("settings_" + key + "_desc"), selector)
+
+    def _create_workflow_settings_expander(self):
+        expander = self._ui.create_expander(t("settings_workflow"), t("settings_workflow_desc"))
+        panel = self._ui.create_stack_panel()
+        for key, choices in (
+            (
+                "startup_page",
+                [
+                    ("global", "nav_global"),
+                    ("bars", "nav_bars"),
+                    ("widgets", "nav_widgets"),
+                    ("styles", "nav_styles"),
+                    ("app_settings", "settings_title"),
+                ],
+            ),
+            ("backup_before_save", [(True, "setting_on"), (False, "setting_off")]),
+            (
+                "backup_retention",
+                [
+                    (5, "setting_backups_5"),
+                    (10, "setting_backups_10"),
+                    (20, "setting_backups_20"),
+                    (50, "setting_backups_50"),
+                ],
+            ),
+        ):
+            panel.children.append(self._preference_card(key, choices))
+        button = self._ui.create_button(t("settings_open_backups"))
+
+        def open_backups(sender, args):
+            directory = self._app._config_manager.backup_directory
+            directory.mkdir(parents=True, exist_ok=True)
+            os.startfile(str(directory))
+
+        button.add_click(open_backups)
+        panel.children.append(button)
+        expander.content = panel
         return expander
 
     def _on_language_changed(self, sender, args):
@@ -876,7 +948,7 @@ class AppSettingsPage:
     def _get_cache_size(self):
         """Calculate total cache size in bytes."""
         total_size = 0
-        for dir_path in [APP_DATA_DIR, WEBVIEW_CACHE_DIR]:
+        for dir_path in [WEBVIEW_CACHE_DIR]:
             if os.path.exists(dir_path):
                 for dirpath, dirnames, filenames in os.walk(dir_path):
                     for filename in filenames:
@@ -917,6 +989,16 @@ class AppSettingsPage:
 
         def on_clear_click(sender, args):
             """Handle clear cache button click with confirmation."""
+            if self._app._unsaved_changes or self._app._saving:
+                dialog = self._app.create_dialog(
+                    '<ContentDialog xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" '
+                    f'Title="{UIFactory.escape_xml(t("settings_clear_cache"))}" '
+                    f'CloseButtonText="{UIFactory.escape_xml(t("common_ok"))}">'
+                    f'<TextBlock Text="{UIFactory.escape_xml(t("settings_cache_unsaved"))}" TextWrapping="Wrap"/>'
+                    "</ContentDialog>"
+                )
+                dialog.show_async()
+                return
             dialog_xaml = f"""<ContentDialog 
                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                 Title="{UIFactory.escape_xml(t("settings_clear_cache_confirm_title"))}"
@@ -948,7 +1030,7 @@ class AppSettingsPage:
             script_path = os.path.abspath(sys.argv[0])
 
         # Clear directories - delete files individually to skip locked ones
-        for dir_path in [APP_DATA_DIR, WEBVIEW_CACHE_DIR]:
+        for dir_path in [WEBVIEW_CACHE_DIR]:
             if os.path.exists(dir_path):
                 for root, dirs, files in os.walk(dir_path, topdown=False):
                     for name in files:

@@ -8,6 +8,7 @@ import json
 import os
 
 from core.constants import APP_DATA_DIR, DEFAULT_SETTINGS, SETTINGS_PATH
+from core.file_io import atomic_write_text
 from core.logger import error
 
 _preferences = None
@@ -27,15 +28,14 @@ class Preferences:
             if self._settings_path.exists():
                 with open(self._settings_path, encoding="utf-8") as f:
                     saved = json.load(f)
-                    self._settings = {**DEFAULT_SETTINGS, **(saved or {})}
+                    self._settings = {**DEFAULT_SETTINGS, **(saved if isinstance(saved, dict) else {})}
         except Exception as e:
             error(f"Error loading app settings: {e}")
             self._settings = DEFAULT_SETTINGS.copy()
 
     def _save(self) -> None:
         try:
-            with open(self._settings_path, "w", encoding="utf-8") as f:
-                json.dump(self._settings, f, indent=2)
+            atomic_write_text(self._settings_path, json.dumps(self._settings, indent=2, ensure_ascii=False))
         except Exception as e:
             error(f"Error saving app settings: {e}")
 
@@ -53,3 +53,19 @@ def get_preferences() -> Preferences:
     if _preferences is None:
         _preferences = Preferences()
     return _preferences
+
+
+def editor_options():
+    """Shared Monaco options for CSS and widget YAML editors."""
+    prefs = get_preferences()
+    tab_size = prefs.get("editor_tab_size", 2)
+    return {
+        "wordWrap": prefs.get("editor_word_wrap", "on"),
+        "minimap": {"enabled": bool(prefs.get("editor_minimap", False))},
+        "lineNumbers": prefs.get("editor_line_numbers", "on"),
+        "tabSize": tab_size if tab_size in (2, 4, 8) else 2,
+        "insertSpaces": True,
+        "detectIndentation": False,
+        "renderWhitespace": prefs.get("editor_render_whitespace", "selection"),
+        "bracketPairColorization": {"enabled": bool(prefs.get("editor_bracket_colors", True))},
+    }

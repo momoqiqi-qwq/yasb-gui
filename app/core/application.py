@@ -16,7 +16,7 @@ from core.config_manager import ConfigManager
 from core.constants import APP_ICON, IS_EXECUTABLE, LOG_PATH
 from core.localization import t
 from core.logger import error, warning
-from core.preferences import get_preferences
+from core.preferences import editor_options, get_preferences
 from core.schema_fetcher import is_database_valid
 from core.updater import app_updater, updater
 from core.win32_types import GWL_WNDPROC, MINMAXINFO, OFN_EXPLORER, OFN_OVERWRITEPROMPT, OPENFILENAMEW, WM_GETMINMAXINFO
@@ -30,7 +30,7 @@ from typing_extensions import override
 from ui.controls import UIFactory
 from ui.loader import load_xaml
 from winrt.system import Array
-from winrt.windows.foundation import IPropertyValue
+from winrt.windows.foundation import AsyncStatus, IPropertyValue
 from winrt.windows.ui.xaml.interop import TypeKind, TypeName
 from winui3.microsoft.ui.composition.systembackdrops import MicaKind
 from winui3.microsoft.ui.windowing import TitleBarTheme
@@ -89,6 +89,7 @@ class ConfiguratorApp(Application, IXamlMetadataProvider):
         self._nav_items = {}  # Store nav items by tag for updating labels
         self._unsaved_infobar = None  # InfoBar for unsaved changes
         self._config_load_error = None
+        self._saving = False
 
         # App update state
         self._update_available = False
@@ -420,7 +421,12 @@ class ConfiguratorApp(Application, IXamlMetadataProvider):
         self._is_loading = False
 
         # Select first item - this triggers _on_nav_selection_changed which shows the page
-        if self._nav_view.menu_items.size > 0:
+        initial = get_preferences().get("startup_page", "global")
+        initial_key = "nav_settings" if initial == "app_settings" else "nav_" + initial
+        item = self._nav_items.get(initial_key)
+        if item is not None:
+            self._nav_view.selected_item = item
+        elif self._nav_view.menu_items.size > 0:
             self._nav_view.selected_item = self._nav_view.menu_items.get_at(0)
 
     def _check_app_updates_background(self):
@@ -463,6 +469,7 @@ class ConfiguratorApp(Application, IXamlMetadataProvider):
         """Setup the unsaved changes InfoBar."""
         self._unsaved_infobar = self._nav_view.find_name("UnsavedInfoBar").as_(InfoBar)
         save_btn = self._nav_view.find_name("SaveButton").as_(Button)
+        self._save_button = save_btn
         later_btn = self._nav_view.find_name("LaterButton").as_(Button)
 
         # Set translated title
@@ -671,8 +678,32 @@ class ConfiguratorApp(Application, IXamlMetadataProvider):
         except Exception as e:
             error(f"Footer action error: {e}", exc_info=True)
 
-    def _save_config(self):
+    def _save_config(self, on_saved=None):
         """Save configuration to disk - only saves what has changed."""
+        if self._saving:
+            return
+
+        def finish(content=None):
+            try:
+                if self._unsaved_config and not self._config_manager.save_config():
+                    raise OSError(t("save_config_failed"))
+                if self._unsaved_styles:
+                    if not isinstance(content, str):
+                        raise ValueError(t("save_editor_not_ready"))
+                    if not self._config_manager.save_styles(content):
+                        raise OSError(t("save_styles_failed"))
+                self.mark_saved()
+                if on_saved and not self._unsaved_changes:
+                    self._saving = False
+                    on_saved()
+            except Exception as exc:
+                error(f"Save error: {exc}", exc_info=True)
+                self.mark_saved()  # Recompute each file separately after partial success.
+                self._show_save_error(str(exc))
+            finally:
+                self._saving = False
+                self._save_button.is_enabled = True
+
         try:
             if self._unsaved_config:
                 from core.yasb_schema import compatibility_errors
@@ -688,42 +719,42 @@ class ConfiguratorApp(Application, IXamlMetadataProvider):
                     )
                     dialog.show_async()
                     return
-            saved_something = False
+            self._saving = True
+            self._save_button.is_enabled = False
+            if self._unsaved_styles and self._styles_webview and self._styles_page._editor_ready:
 
-            # Only save styles if styles changed
-            if self._unsaved_styles:
-                # Try Monaco editor (WebView2) first
-                if self._styles_webview:
-                    try:
+                def retrieved(op, status):
+                    if status == AsyncStatus.COMPLETED:
+                        try:
+                            content = json.loads(op.get_results())
+                        except Exception as exc:
+                            self._saving = False
+                            self._save_button.is_enabled = True
+                            self._show_save_error(str(exc))
+                            return
+                        finish(content)
+                    else:
+                        self._saving = False
+                        self._save_button.is_enabled = True
+                        self._show_save_error(t("save_editor_not_ready"))
 
-                        def save_styles_content(content):
-                            if content:
-                                self._config_manager.save_styles(content)
-
-                        # Use callback pattern to get content and save
-                        self._styles_webview.execute_script_async("getContent()").completed = lambda op, status: (
-                            save_styles_content(json.loads(op.get_results())) if status.value == 1 else None
-                        )
-                        saved_something = True
-                    except Exception as e:
-                        error(f"Error saving styles from Monaco: {e}")
-                # Fallback to legacy TextBox
-                elif self._styles_editor:
-                    self._config_manager.save_styles(self._styles_editor.text)
-                    saved_something = True
-
-            # Only save config if config changed
-            if self._unsaved_config:
-                result = self._config_manager.save_config()
-                if result:
-                    saved_something = True
-                else:
-                    return
-
-            if saved_something:
-                self.mark_saved()
+                self._styles_webview.execute_script_async("getContent()").completed = retrieved
+            else:
+                finish(self._styles_page._draft_content)
         except Exception as e:
+            self._saving = False
+            self._save_button.is_enabled = True
             error(f"Save error: {e}", exc_info=True)
+            self._show_save_error(str(e))
+
+    def _show_save_error(self, message):
+        dialog = self.create_dialog(
+            '<ContentDialog xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" '
+            f'Title="{UIFactory.escape_xml(t("save_failed"))}" '
+            f'CloseButtonText="{UIFactory.escape_xml(t("common_ok"))}">'
+            f'<TextBlock Text="{UIFactory.escape_xml(message)}" TextWrapping="Wrap"/></ContentDialog>'
+        )
+        dialog.show_async()
 
     def mark_unsaved(self, change_type="config", current_styles=None):
         """Mark unsaved changes, checking if content actually differs from original.
@@ -745,9 +776,10 @@ class ConfiguratorApp(Application, IXamlMetadataProvider):
 
     def mark_saved(self):
         """Mark that changes have been saved and reset save button style."""
-        self._unsaved_changes = False
-        self._unsaved_styles = False
-        self._unsaved_config = False
+        self._unsaved_config = self._config_manager.has_config_changed()
+        draft = self._styles_page._draft_content
+        self._unsaved_styles = draft is not None and self._config_manager.has_styles_changed(draft)
+        self._unsaved_changes = self._unsaved_config or self._unsaved_styles
         self._update_save_button_style()
 
     def _update_save_button_style(self):
@@ -764,6 +796,9 @@ class ConfiguratorApp(Application, IXamlMetadataProvider):
 
     def _on_window_closed(self, sender, args):
         """Handle window close event - show dialog if unsaved changes."""
+        if self._saving:
+            args.handled = True
+            return
         if self._unsaved_changes:
             # Prevent close and show dialog
             args.handled = True
@@ -781,19 +816,21 @@ class ConfiguratorApp(Application, IXamlMetadataProvider):
         )
         dialog = self.create_dialog(dialog_xaml)
 
-        def on_primary(s, e):
-            # Save and close
-            self._save_config()
-            self._window.close()
+        def closed(s, e):
+            from winui3.microsoft.ui.xaml.controls import ContentDialogButton
 
-        def on_secondary(s, e):
-            # Discard and close
-            self._unsaved_changes = False
-            self._window.close()
+            if e.result == ContentDialogButton.PRIMARY:
+                self._save_config(on_saved=self._window.close)
+            elif e.result == ContentDialogButton.SECONDARY:
+                self._unsaved_changes = False
+                self._window.close()
 
-        dialog.add_primary_button_click(on_primary)
-        dialog.add_secondary_button_click(on_secondary)
+        dialog.add_closed(closed)
         dialog.show_async()
+
+    def apply_editor_options(self):
+        if self._styles_webview and self._styles_page._editor_ready:
+            self._styles_webview.execute_script_async(f"setEditorOptions({json.dumps(editor_options())})")
 
     def _backup_config(self):
         """Backup config folder as a zip file."""
