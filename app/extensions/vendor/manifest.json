@@ -1,0 +1,8 @@
+{
+  "project": "Hyacinthe-primus/Project_MochaGlass",
+  "release": "v1.0.2",
+  "license": "MIT",
+  "url": "https://github.com/Hyacinthe-primus/Project_MochaGlass/releases/download/v1.0.2/device_status.exe",
+  "sha256": "0e85bd331a3f847eef7280282a6267de58a107b96bb50b4387302d6a3d74652d",
+  "source": "device_status-source.rs"
+}

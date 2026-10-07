@@ -1,0 +1,94 @@
+﻿file,line,control,event,handler
+app/core/application.py,146,self._window,add_closed,self._on_window_closed
+app/core/application.py,242,dialog,add_primary_button_click,on_primary
+app/core/application.py,263,dialog,add_primary_button_click,on_primary
+app/core/application.py,372,dialog,add_closing,on_closing
+app/core/application.py,373,dialog,add_primary_button_click,on_primary
+app/core/application.py,374,dialog,add_secondary_button_click,on_secondary
+app/core/application.py,492,save_btn,add_click,"lambda s, e: self._save_and_hide_footer()"
+app/core/application.py,493,later_btn,add_click,"lambda s, e: self._discard_and_hide_footer()"
+app/core/application.py,847,dialog,add_closed,closed
+app/core/application.py,928,dialog,add_closed,closed
+app/core/editor/editor_context_menu.py,86,paste_item,add_click,"lambda s, e: paste_from_clipboard()"
+app/core/editor/editor_context_menu.py,36,item,add_click,"lambda s, e, js=script: webview.execute_script_async(js)"
+app/pages/app_settings.py,303,yasb_link,add_click,"lambda s, e: webbrowser.open(""https://github.com/amnweb/yasb"")"
+app/pages/app_settings.py,304,yasb_gui_link,add_click,"lambda s, e: webbrowser.open(""https://github.com/amnweb/yasb-gui"")"
+app/pages/app_settings.py,305,yasb_site_link,add_click,"lambda s, e: webbrowser.open(""https://yasb.dev"")"
+app/pages/app_settings.py,461,button,add_click,open_backups
+app/pages/app_settings.py,464,history_button,add_click,"lambda s, e: setattr(self._app._nav_view, ""selected_item"", self._app._nav_items[""history_title""])"
+app/pages/app_settings.py,696,update_btn,add_click,on_update_click
+app/pages/app_settings.py,1027,clear_btn,add_click,on_clear_click
+app/pages/app_settings.py,880,check_btn,add_click,on_check_click
+app/pages/app_settings.py,951,install_btn,add_click,on_install_click
+app/pages/app_settings.py,1024,dialog,add_closed,on_dialog_closed
+app/pages/bars.py,110,self._add_btn,add_click,"lambda s, e: self._add_bar()"
+app/pages/bars.py,111,self._delete_btn,add_click,"lambda s, e: self._delete_bar(self._selected_bar)"
+app/pages/bars.py,223,rename_save_btn,add_click,on_rename_save
+app/pages/bars.py,343,detect_btn,add_click,show_monitors_flyout
+app/pages/bars.py,291,all_item,add_click,"lambda s, e: self._set_screen_value(screens, '[""*""]')"
+app/pages/bars.py,301,all_assigned_item,add_click,"lambda s, e: self._set_screen_value(screens, '[""**""]')"
+app/pages/bars.py,306,primary_item,add_click,"lambda s, e: self._set_screen_value(screens, '[""primary""]')"
+app/pages/bars.py,329,wiki_item,add_click,"lambda s, e: webbrowser.open( ""https://github.com/amnweb/yasb/wiki/Configuration#screen-assignment-options"" )"
+app/pages/bars.py,316,item,add_click,"lambda s, e, m=monitor_name: self._set_screen_value(screens, f'[""{m}""]')"
+app/pages/community.py,22,refresh,add_click,"lambda s, e: self.show()"
+app/pages/community.py,44,check,add_click,diagnose
+app/pages/community.py,55,edit,add_click,configure
+app/pages/env_variables.py,166,create_btn,add_click,"lambda s, e: self._on_create_file()"
+app/pages/env_variables.py,226,delete_btn,add_click,"lambda s, e: self._on_delete_file()"
+app/pages/env_variables.py,243,link_btn,add_click,"lambda s, e: webbrowser.open(ENV_WIKI_URL)"
+app/pages/env_variables.py,260,add_btn,add_click,"lambda s, e: self._add_variable()"
+app/pages/env_variables.py,282,delete_btn,add_click,"lambda s, e, i=idx: self._delete_variable(i)"
+app/pages/env_variables.py,203,add_btn,add_click,"lambda s, e, n=var_name, v=default_value: self._add_common_variable(n, v)"
+app/pages/history.py,26,refresh,add_click,"lambda s, e: self.show()"
+app/pages/history.py,41,folder,add_click,open_folder
+app/pages/history.py,33,button,add_click,"lambda s, e, item=entry: self.preview(item)"
+app/pages/history.py,89,dialog,add_closing,closing
+app/pages/history.py,90,dialog,add_closed,"lambda s, e: self.show() if e.result == ContentDialogButton.PRIMARY else None"
+app/pages/styles.py,233,dialog,add_closed,"lambda s, e: reload() if e.result == ContentDialogButton.PRIMARY else None"
+app/pages/styles.py,66,open_btn,add_click,"lambda s, e: subprocess.Popen([""notepad"", self._config_manager.styles_path])"
+app/pages/styles.py,69,reload_btn,add_click,"lambda s, e: self.reload_from_disk()"
+app/pages/styles.py,264,dialog,add_closing,on_closing
+app/pages/widgets.py,312,btn,add_click,"lambda s, e, name=widget_name: self._show_edit_widget_dialog(name, None)"
+app/pages/widgets.py,342,edit_item,add_click,"lambda s, e: self._show_edit_widget_dialog(widget_name, None)"
+app/pages/widgets.py,349,form_item,add_click,"lambda s, e: self._show_widget_form(widget_name)"
+app/pages/widgets.py,355,rename_item,add_click,"lambda s, e: self._show_rename_widget_dialog(widget_name)"
+app/pages/widgets.py,361,delete_item,add_click,"lambda s, e: self._delete_disabled_widget(widget_name)"
+app/pages/widgets.py,394,main_btn,add_click,"lambda s, e: self._show_edit_widget_dialog(widget_name, position)"
+app/pages/widgets.py,400,up_btn,add_click,"lambda s, e: self._animate_and_move_widget(widget_name, position, -1, index)"
+app/pages/widgets.py,401,down_btn,add_click,"lambda s, e: self._animate_and_move_widget(widget_name, position, 1, index)"
+app/pages/widgets.py,417,edit_item,add_click,"lambda s, e: self._show_edit_widget_dialog(widget_name, position)"
+app/pages/widgets.py,422,form_item,add_click,"lambda s, e: self._show_widget_form(widget_name)"
+app/pages/widgets.py,432,add_item,add_click,"lambda s, e: self._show_add_widget_dialog(position)"
+app/pages/widgets.py,477,duplicate_item,add_click,"lambda s, e: self._duplicate_widget(widget_name, position)"
+app/pages/widgets.py,483,rename_item,add_click,"lambda s, e: self._show_rename_widget_dialog(widget_name)"
+app/pages/widgets.py,489,disable_item,add_click,"lambda s, e: self._disable_widget(widget_name, position)"
+app/pages/widgets.py,495,delete_item,add_click,"lambda s, e: self._delete_widget(widget_name, position)"
+app/pages/widgets.py,140,add_widget_button,add_click,"lambda s, e: self._show_add_widget_dialog(None)"
+app/pages/widgets.py,193,add_item,add_click,"lambda s, e, p=pos_key: self._show_add_widget_dialog(p)"
+app/pages/widgets.py,334,add_item,add_click,"lambda s, e, p=pos_key, n=widget_name: self._enable_widget(n, p)"
+app/pages/widgets.py,441,up_item,add_click,"lambda s, e: self._move_widget_order(widget_name, position, -1)"
+app/pages/widgets.py,448,down_item,add_click,"lambda s, e: self._move_widget_order(widget_name, position, 1)"
+app/pages/widgets.py,615,dialog,add_closed,on_dialog_closed
+app/pages/widgets.py,638,item,add_click,"lambda s, e: self._show_edit_widget_dialog(widget_name, None, yaml_only=True)"
+app/pages/widgets.py,1037,dialog,add_closing,on_dialog_closing
+app/pages/widgets.py,1192,dialog,add_closing,on_closing
+app/pages/widgets.py,469,move_item,add_click,"lambda s, e, p=pos_key: self._move_widget(widget_name, position, p)"
+app/pages/widgets.py,783,docs_link,add_click,"lambda s, e, url=doc_link: __import__(""webbrowser"").open(url)"
+app/pages/widgets.py,1158,btn,add_click,on_widget_click
+app/ui/advanced_editor.py,52,button,add_click,open_editor
+app/ui/advanced_editor.py,48,dialog,add_closing,closing
+app/ui/advanced_editor.py,49,dialog,add_closed,closed
+app/ui/advanced_editor.py,58,form_button,add_click,"lambda s, e: show_schema_editor(app, title, schema_node, get_data(), apply_data, refresh)"
+app/ui/apps_editor.py,130,manual,add_click,add_command
+app/ui/apps_editor.py,148,browse,add_click,choose
+app/ui/apps_editor.py,149,dialog,add_closing,closing
+app/ui/apps_editor.py,150,dialog,add_closed,"lambda s, e: refresh() if e.result == ContentDialogButton.PRIMARY else None"
+app/ui/apps_editor.py,78,icon,add_click,choose_icon
+app/ui/apps_editor.py,96,remove,add_click,delete
+app/ui/apps_editor.py,88,move,add_click,reorder
+app/ui/command_presets.py,20,button,add_click,apply
+app/ui/community_editor.py,86,dialog,add_closing,closing
+app/ui/community_editor.py,87,dialog,add_closed,"lambda s, e: refresh() if e.result == ContentDialogButton.PRIMARY else None"
+app/ui/community_editor.py,43,browse,add_click,choose
+app/ui/schema_editor.py,170,dialog,add_closing,closing
+app/ui/schema_editor.py,171,dialog,add_closed,"lambda s, e: refresh() if e.result == ContentDialogButton.PRIMARY else None"

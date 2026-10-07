@@ -9,15 +9,19 @@ import re
 import time
 import webbrowser
 from ctypes import WinError
+from pathlib import Path
 from types import SimpleNamespace
 
 from core.advanced_config import replace_widgets
+from core.apps_editor import APPS_TYPE
+from core.button_defaults import prepare_button_options
 from core.code_editor import (
     dict_to_yaml,
     fix_yaml_indentation,
     format_yaml,
     get_code_editor_html_uri,
 )
+from core.community_widgets import community_templates
 from core.constants import WEBVIEW_CACHE_DIR
 from core.editor.editor_context_menu import monaco_context_menu
 from core.localization import t
@@ -39,8 +43,11 @@ from core.widget_helpers import (
 from core.writing_templates import command_templates
 from core.yasb_schema import make_defaults, validate_options, widget_schemas
 from ui.advanced_editor import create_advanced_editor
+from ui.apps_editor import show_apps_editor
+from ui.community_editor import show_community_editor
 from ui.controls import UIFactory
 from ui.loader import load_xaml
+from ui.motion import instrument_button
 from ui.schema_editor import show_schema_editor
 from webview2.microsoft.web.webview2.core import CoreWebView2Environment
 from winrt.windows.foundation import AsyncStatus, IAsyncAction, IAsyncOperation, Uri
@@ -65,8 +72,6 @@ from winui3.microsoft.ui.xaml.controls import (
     WebView2,
 )
 from winui3.microsoft.ui.xaml.markup import XamlReader
-from winui3.microsoft.ui.xaml.media import TranslateTransform
-from winui3.microsoft.ui.xaml.media.animation import Storyboard
 
 
 def get_widget_registry():
@@ -301,6 +306,8 @@ class WidgetsPage:
             </StackPanel>
         </Button>'''
         btn = XamlReader.load(btn_xaml).as_(Button)
+        btn.margin = Thickness(4, 2, 4, 2)
+        instrument_button(btn, card=True)
 
         menu = self._create_disabled_widget_context_menu(widget_name)
         btn.context_flyout = menu
@@ -337,6 +344,8 @@ class WidgetsPage:
         edit_item.icon = self._create_icon("&#xE70F;")
         edit_item.add_click(lambda s, e: self._show_edit_widget_dialog(widget_name, None))
         menu.items.append(edit_item)
+
+        self._add_apps_yaml_menu(menu, widget_name)
 
         form_item = MenuFlyoutItem()
         form_item.text = t("widgets_form_editor")
@@ -385,8 +394,13 @@ class WidgetsPage:
         container.find_name("SubText").as_(TextBlock).text = f"{category} · {description}" if description else category
 
         main_btn = container.find_name("MainButton").as_(Button)
+        main_btn.margin = Thickness(4, 2, 4, 2)
+        instrument_button(main_btn, card=True)
+        main_btn.add_click(lambda s, e: self._show_edit_widget_dialog(widget_name, position))
         up_btn = container.find_name("UpButton").as_(Button)
         down_btn = container.find_name("DownButton").as_(Button)
+        instrument_button(up_btn)
+        instrument_button(down_btn)
 
         main_btn.context_flyout = self._create_widget_context_menu(widget_name, position, index, total)
 
@@ -414,6 +428,8 @@ class WidgetsPage:
         form_item.text = t("widgets_form_editor")
         form_item.add_click(lambda s, e: self._show_widget_form(widget_name))
         menu.items.append(form_item)
+
+        self._add_apps_yaml_menu(menu, widget_name)
 
         menu.items.append(MenuFlyoutSeparator())
 
@@ -495,46 +511,8 @@ class WidgetsPage:
             self._load_widgets()
 
     def _animate_and_move_widget(self, widget_name, position, direction, current_index):
-        """Move widget with smooth animation."""
-        container = self._widget_panels.get(position)
-        target_index = current_index + direction
-
-        if not container or target_index < 0 or target_index >= container.children.size:
-            self._move_widget_order(widget_name, position, direction)
-            return
-
-        try:
-            current_item = container.children.get_at(current_index).as_(Grid)
-            target_item = container.children.get_at(target_index).as_(Grid)
-            current_tf = current_item.find_name("ContainerTransform").as_(TranslateTransform)
-            target_tf = target_item.find_name("ContainerTransform").as_(TranslateTransform)
-
-            if not (current_tf and target_tf):
-                self._move_widget_order(widget_name, position, direction)
-                return
-
-            dist1 = (target_item.actual_height + 4) * direction
-            dist2 = (current_item.actual_height + 4) * -direction
-
-            def create_storyboard(to_value):
-                xaml = f'<Storyboard xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"><DoubleAnimation Storyboard.TargetProperty="Y" To="{to_value}" Duration="0:0:0.2"/></Storyboard>'
-                return XamlReader.load(xaml).as_(Storyboard)
-
-            sb1, sb2 = create_storyboard(dist1), create_storyboard(dist2)
-            sb1.add_completed(
-                lambda s, e: (
-                    setattr(current_tf, "y", 0),
-                    setattr(target_tf, "y", 0),
-                    self._move_widget_order(widget_name, position, direction),
-                )
-            )
-            Storyboard.set_target(sb1.children.get_at(0), current_tf)
-            Storyboard.set_target(sb2.children.get_at(0), target_tf)
-            sb1.begin()
-            sb2.begin()
-        except Exception as e:
-            error(f"Animation error: {e}", exc_info=True)
-            self._move_widget_order(widget_name, position, direction)
+        """Apply reordering immediately; the button supplies visual feedback."""
+        self._move_widget_order(widget_name, position, direction)
 
     def _move_widget(self, widget_name, old_position, new_position):
         """Move widget to a different position."""
@@ -621,7 +599,24 @@ class WidgetsPage:
             self._app.mark_unsaved()
             self._load_widgets()
 
-    def _show_edit_widget_dialog(self, widget_name, position):
+    def _add_apps_yaml_menu(self, menu, widget_name):
+        widget = self._config_manager.get_widget(widget_name)
+        if widget and widget.get("type") == APPS_TYPE:
+            item = MenuFlyoutItem()
+            item.text = t("apps_yaml")
+            item.add_click(lambda s, e: self._show_edit_widget_dialog(widget_name, None, yaml_only=True))
+            menu.items.append(item)
+
+    def _prepare_buttons(self, type_path, options, previous=None):
+        options, styled = prepare_button_options(
+            type_path, options, Path(self._config_manager.config_path).parent, previous
+        )
+        validate_options(type_path, options)
+        if styled:
+            self._app.stage_button_styles()
+        return options
+
+    def _show_edit_widget_dialog(self, widget_name, position, yaml_only=False):
         """Show dialog to edit an existing widget."""
         widget = self._config_manager.get_widget(widget_name)
         if not widget:
@@ -630,6 +625,13 @@ class WidgetsPage:
 
         # Get doc_link from registry by matching type_path
         widget_type = widget.get("type", "unknown")
+        if widget_type == APPS_TYPE and not yaml_only:
+
+            def apply(options):
+                widget["options"] = self._prepare_buttons(widget_type, options, widget.get("options", {}))
+
+            show_apps_editor(self._app, widget.get("options", {}), apply, self._load_widgets)
+            return
         doc_link = ""
         for wid, info in self._widget_registry.items():
             if info.type_path == widget_type:
@@ -649,13 +651,16 @@ class WidgetsPage:
         widget = self._config_manager.get_widget(widget_name)
         if not widget:
             return
+        if widget.get("type") == APPS_TYPE:
+            self._show_edit_widget_dialog(widget_name, None)
+            return
         node = widget_schemas().get(widget["type"])
         if not node:
             self._show_edit_widget_dialog(widget_name, None)
             return
 
         def apply(options):
-            widget["options"] = options
+            widget["options"] = self._prepare_buttons(widget["type"], options, widget.get("options", {}))
 
         show_schema_editor(
             self._app, t("widgets_form_editor"), node, widget.get("options", {}), apply, self._load_widgets
@@ -671,6 +676,27 @@ class WidgetsPage:
         while name in existing:
             name = f"{base_name}_{counter}"
             counter += 1
+
+        if widget_info.get("community_kind") or widget_info["type_path"] == APPS_TYPE:
+
+            def apply(options):
+                bar = self._config_manager.get_bar(self._app._widgets_selected_bar)
+                if bar is None:
+                    raise ValueError(t("bars_selection"))
+                options = self._prepare_buttons(widget_info["type_path"], options)
+                self._config_manager.config.setdefault("widgets", {})[name] = {
+                    "type": widget_info["type_path"],
+                    "options": options,
+                }
+                bar.setdefault("widgets", {}).setdefault(position, []).append(name)
+                if position in self._section_expanders:
+                    self._section_expanders[position].is_expanded = True
+
+            if widget_info["type_path"] == APPS_TYPE:
+                show_apps_editor(self._app, widget_info.get("defaults") or {}, apply, self._load_widgets)
+            else:
+                show_community_editor(self._app, widget_info, apply, self._load_widgets)
+            return
 
         self._show_widget_editor_dialog(
             widget_name=name,
@@ -948,6 +974,8 @@ class WidgetsPage:
                             error_infobar.is_open = True
                             return
 
+                        new_options = self._prepare_buttons(widget_type, new_options)
+
                         if "widgets" not in self._config_manager.config:
                             self._config_manager.config["widgets"] = {}
 
@@ -972,7 +1000,9 @@ class WidgetsPage:
                         validate_options(widget_type, new_options)
                         widget = self._config_manager.get_widget(widget_name)
                         if widget:
-                            widget["options"] = new_options
+                            widget["options"] = self._prepare_buttons(
+                                widget_type, new_options, widget.get("options", {})
+                            )
                             self._app.mark_unsaved()
 
                         # Handle rename
@@ -1031,6 +1061,7 @@ class WidgetsPage:
                 )
             all_widgets.sort(key=lambda x: (x["category"], x["name"]))
             all_widgets.extend(command_templates())
+            all_widgets.extend(community_templates())
             self._add_widget_data = {"all_widgets": all_widgets}
         except Exception as e:
             error(f"Setup widget data error: {e}", exc_info=True)
@@ -1085,6 +1116,8 @@ class WidgetsPage:
                         widgets_list.children.append(header)
 
                     btn = Button()
+                    instrument_button(btn, card=True)
+                    btn.margin = Thickness(4, 2, 4, 2)
                     btn.horizontal_alignment = 3  # Stretch
                     btn.horizontal_content_alignment = 3  # Stretch
                     btn.padding = Thickness(12, 8, 12, 8)

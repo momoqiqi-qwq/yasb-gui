@@ -7,6 +7,7 @@ Creates WinUI 3 controls with consistent styling.
 from core.localization import t
 from core.preferences import get_preferences
 from ui.loader import load_xaml
+from ui.motion import instrument_button
 from winui3.microsoft.ui.xaml import Application
 from winui3.microsoft.ui.xaml.controls import (
     Button,
@@ -69,7 +70,7 @@ class UIFactory:
         safe_text = UIFactory.escape_xml(text)
         xaml = f'''<Button xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" 
                     Content="{safe_text}" HorizontalAlignment="Stretch" Padding="12,8"/>'''
-        return XamlReader.load(xaml).as_(Button)
+        return instrument_button(XamlReader.load(xaml).as_(Button))
 
     @staticmethod
     def create_text_block(text, style=None, margin="0,8,0,4", wrap=False, secondary=False):
@@ -217,7 +218,7 @@ class UIFactory:
         style_attr = f'Style="{{StaticResource {style}}}"' if style else ""
         xaml = f'''<Button xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     Content="{safe_text}" {style_attr} Padding="{padding}"/>'''
-        return XamlReader.load(xaml).as_(Button)
+        return instrument_button(XamlReader.load(xaml).as_(Button))
 
     @staticmethod
     def create_icon_button(glyph, padding="8,6", font_size=12):
@@ -226,7 +227,7 @@ class UIFactory:
                     Padding="{padding}" VerticalAlignment="Center">
                     <FontIcon Glyph="{glyph}" FontSize="{font_size}"/>
                 </Button>'''
-        return XamlReader.load(xaml).as_(Button)
+        return instrument_button(XamlReader.load(xaml).as_(Button))
 
     @staticmethod
     def create_icon_text_button(glyph, text, spacing=8, padding="8,6", font_size=12):
@@ -238,7 +239,7 @@ class UIFactory:
                         <TextBlock Text="{safe_text}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>'''
-        return XamlReader.load(xaml).as_(Button)
+        return instrument_button(XamlReader.load(xaml).as_(Button))
 
     @staticmethod
     def create_danger_button(text):
@@ -257,7 +258,7 @@ class UIFactory:
                         <SolidColorBrush x:Key="ButtonForegroundPressed" Color="White"/>
                     </Button.Resources>
                 </Button>'''
-        return XamlReader.load(xaml).as_(Button)
+        return instrument_button(XamlReader.load(xaml).as_(Button))
 
     @staticmethod
     def create_info_bar(

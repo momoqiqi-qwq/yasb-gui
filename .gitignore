@@ -23,3 +23,6 @@ msix-all/
 *.zip
 .env
 .env.*
+
+# Pinned MIT community executable, included with license and SHA256.
+!app/extensions/vendor/device_status.exe

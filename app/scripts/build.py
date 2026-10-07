@@ -76,6 +76,8 @@ def main():
             (str(APP_DIR / "core" / "schemas"), "lib/core/schemas/"),
             (str(APP_DIR / "core" / "locales"), "lib/core/locales/"),
             (str(APP_DIR / "core" / "editor"), "lib/core/editor/"),
+            (str(APP_DIR / "core" / "button_icons"), "lib/core/button_icons/"),
+            (str(APP_DIR / "extensions"), "app/extensions/"),
             (str(APP_DIR / "xaml"), "app/xaml/"),
             (str(ASSETS_DIR / "app.ico"), "assets/app.ico"),
         ],

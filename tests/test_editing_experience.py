@@ -135,6 +135,52 @@ def test_async_save_waits_for_completion_and_accepts_empty_css(config):
     assert Path(config.styles_path).read_text() == ""
 
 
+def test_save_preflight_preserves_draft_when_disk_was_edited(config):
+    harness, operation = save_harness(config, "local draft")
+    conflicts = []
+    harness._show_external_conflict = lambda callback=None: conflicts.append(True)
+    Path(config.styles_path).write_text("external edits")
+    ConfiguratorApp._save_config(harness)
+    assert conflicts == [True]
+    assert not harness._saving
+    assert harness._styles_page._draft_content == "local draft"
+    assert Path(config.styles_path).read_text() == "external edits"
+
+
+def test_disk_change_during_async_read_still_blocks_write(config):
+    harness, operation = save_harness(config, "local draft")
+    conflicts = []
+    harness._show_external_conflict = lambda callback=None: conflicts.append(True)
+    closed = []
+    ConfiguratorApp._save_config(harness, on_saved=lambda: closed.append(True))
+    Path(config.styles_path).write_text("external during save")
+    operation.completed(operation, AsyncStatus.COMPLETED)
+    assert conflicts == [True] and not closed
+    assert harness._unsaved_styles and not harness._saving
+    assert Path(config.styles_path).read_text() == "external during save"
+
+
+def test_reload_styles_keeps_unsaved_config(config):
+    harness, operation = save_harness(config, "local CSS")
+    config.config["debug"] = True
+    Path(config.styles_path).write_text("external CSS")
+    harness._styles_webview = None
+    ConfiguratorApp._reload_disk_file(harness, "styles.css")
+    assert harness._styles_page._draft_content == "external CSS"
+    assert harness._unsaved_config and not harness._unsaved_styles
+    assert config.config["debug"] is True
+
+
+def test_reload_config_keeps_unsaved_styles(config):
+    harness, operation = save_harness(config, "local CSS")
+    harness._widgets_page = SimpleNamespace(reload_registry=lambda: None)
+    Path(config.config_path).write_text("bars: {}\nwidgets: {}\ndebug: true\n")
+    ConfiguratorApp._reload_disk_file(harness, "config.yaml")
+    assert config.config["debug"] is True
+    assert harness._styles_page._draft_content == "local CSS"
+    assert harness._unsaved_styles and not harness._unsaved_config
+
+
 def test_async_read_failure_preserves_draft_and_does_not_close(config):
     harness, operation = save_harness(config, "draft")
     closed = []

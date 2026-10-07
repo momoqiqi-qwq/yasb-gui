@@ -5,9 +5,11 @@ import math
 from io import StringIO
 
 from core.advanced_config import yaml_parser
+from core.command_presets import field_presets
 from core.localization import t
 from core.ui_errors import display_error
 from core.yasb_schema import errors_for, field_label, make_defaults, resolve
+from ui.command_presets import create_preset_picker
 from ui.controls import UIFactory
 from winui3.microsoft.ui.xaml.controls import ContentDialogButton, NumberBox, ScrollViewer, TextBox
 
@@ -107,6 +109,15 @@ def build_form(node, original):
 
             include.add_toggled(inclusion)
             row.children.append(control)
+            presets = field_presets(full_path, schema_node)
+            if presets and isinstance(control, TextBox):
+
+                def apply_preset(preset, c=control, toggle=include):
+                    toggle.is_on = True
+                    c.text = preset["value"]
+
+                picker = create_preset_picker(presets, apply_preset)
+                row.children.append(picker)
             panel.children.append(row)
         return panel
 

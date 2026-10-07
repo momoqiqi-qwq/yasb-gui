@@ -419,6 +419,10 @@ class AppSettingsPage:
                 self._prefs.set(key, values[index])
                 if editor:
                     self._app.apply_editor_options()
+                if key == "ui_animations":
+                    from ui.motion import reset_animations
+
+                    reset_animations()
 
         selector.add_selection_changed(changed)
         return self._create_settings_card("\ue713", t("settings_" + key), t("settings_" + key + "_desc"), selector)
@@ -435,9 +439,12 @@ class AppSettingsPage:
                     ("widgets", "nav_widgets"),
                     ("styles", "nav_styles"),
                     ("app_settings", "settings_title"),
+                    ("history", "history_title"),
+                    ("community", "community_manager_title"),
                 ],
             ),
             ("backup_before_save", [(True, "setting_on"), (False, "setting_off")]),
+            ("ui_animations", [(True, "setting_on"), (False, "setting_off")]),
             (
                 "backup_retention",
                 [
@@ -458,6 +465,11 @@ class AppSettingsPage:
 
         button.add_click(open_backups)
         panel.children.append(button)
+        history_button = self._ui.create_button(t("history_title"))
+        history_button.add_click(
+            lambda s, e: setattr(self._app._nav_view, "selected_item", self._app._nav_items["history_title"])
+        )
+        panel.children.append(history_button)
         expander.content = panel
         return expander
 

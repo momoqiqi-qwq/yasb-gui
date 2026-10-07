@@ -11,6 +11,9 @@
 - **用中文调整配置**：界面、组件名称、设置字段和 Monaco 编辑器命令提供简体中文支持。
 - **按版本编辑**：内置 YASB 2.0.6、2.0.7 和开发分支快照规则；正式版 57 种组件，开发快照 59 种组件。
 - **表单与代码编辑**：全局、状态栏和组件支持完整字段表单及高级 YAML；样式使用 CSS 编辑器。
+- **恢复与冲突保护**：备份历史支持差异预览和单文件恢复；外部文件变化时保存前提醒比较。
+- **扩展管理**：检查社区扩展的文件与依赖，重新配置路径及参数并保留自定义外观。详见 [GUI 增强说明](docs/gui-enhancements.md)。
+- **社区扩展**：设备连接状态、全屏/区域截图、Proton VPN 快捷入口，提供中文设置与程序路径选择。详见 [使用说明](docs/community-widgets.md)。
 - **从模板开始自定义**：命令文本、JSON 数据和快捷键三个 CustomWidget 模板；需要配套脚本或数据来源。
 - **按习惯设置编辑器**：换行、缩略图、行号、CSS 缩进、空白字符、括号颜色，以及字体、字号和主题。
 - **让保存更稳妥**：保存前默认备份旧文件，支持数量限制；配置、样式和偏好采用原子写入。
@@ -19,6 +22,8 @@
 独立布局或复杂弹窗需要在 YASB 本体中编写 Python 组件，配置器不会自动生成组件实现。
 
 ## 下载与运行
+
+新增本地 **v0.4.0 单文件便携 EXE**：`release-files/0.4.0/YASB-GUI-0.4.0-x64-portable.exe`。内置 Python、DLL 与程序资源，可单独复制运行，并在启动前校验文件和检查 Windows App Runtime 1.7 / WebView2。系统运行库仍需安装；缺失时提供中文提示。具体依赖、缓存位置及构建方法见 [便携 EXE 说明](docs/portable-exe.md)。该附件尚未发布到 GitHub Releases。
 
 1. 在 Windows x64 上准备好 YASB 及其配置，并安装可用的 Windows App SDK Runtime 与 WebView2 Runtime。
 2. 下载 [v0.2.0 完整 ZIP](https://github.com/momoqiqi-qwq/yasb-gui/releases/download/v0.2.0/YASB-GUI-0.2.0-x64-portable.zip)，解压到独立目录。
@@ -40,7 +45,7 @@
 
 - `style: adaptive` 和 `style_adaptive_exclude` 属于内置开发快照，不属于 YASB 2.0.7 正式版。
 - 开发快照随本仓库版本提供，不代表始终同步远端 main。
-- 草稿暂不跨重启恢复；外部文件修改冲突检测、多文件联合保存和 schema 缓存同步仍待完善。
+- 草稿暂不跨重启恢复；多文件联合保存和 schema 缓存同步仍待完善。
 - CSS 清理注释仍采用简单规则，应谨慎使用。
 - 编辑器桥接测试使用 Monaco 替身，完整 WebView 交互尚未端到端验证。
 

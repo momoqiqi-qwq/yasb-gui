@@ -22,8 +22,10 @@ from core.updater import app_updater, updater
 from core.win32_types import GWL_WNDPROC, MINMAXINFO, OFN_EXPLORER, OFN_OVERWRITEPROMPT, OPENFILENAMEW, WM_GETMINMAXINFO
 from pages.app_settings import AppSettingsPage
 from pages.bars import BarsPage
+from pages.community import CommunityPage
 from pages.env_variables import EnvVariablesPage
 from pages.global_settings import GlobalSettingsPage
+from pages.history import HistoryPage
 from pages.styles import StylesPage
 from pages.widgets import WidgetsPage
 from typing_extensions import override
@@ -47,6 +49,7 @@ from winui3.microsoft.ui.xaml.controls import (
     Button,
     ContentControl,
     ContentDialog,
+    ContentDialogButton,
     InfoBadge,
     InfoBar,
     NavigationView,
@@ -90,6 +93,7 @@ class ConfiguratorApp(Application, IXamlMetadataProvider):
         self._unsaved_infobar = None  # InfoBar for unsaved changes
         self._config_load_error = None
         self._saving = False
+        self._navigation_motion = None
 
         # App update state
         self._update_available = False
@@ -101,6 +105,8 @@ class ConfiguratorApp(Application, IXamlMetadataProvider):
         self._widgets_page = WidgetsPage(self)
         self._styles_page = StylesPage(self)
         self._env_page = EnvVariablesPage(self)
+        self._history_page = HistoryPage(self)
+        self._community_page = CommunityPage(self)
         self._app_settings_page = AppSettingsPage(self)
 
     @override
@@ -422,7 +428,11 @@ class ConfiguratorApp(Application, IXamlMetadataProvider):
 
         # Select first item - this triggers _on_nav_selection_changed which shows the page
         initial = get_preferences().get("startup_page", "global")
-        initial_key = "nav_settings" if initial == "app_settings" else "nav_" + initial
+        initial_key = {
+            "app_settings": "nav_settings",
+            "history": "history_title",
+            "community": "community_manager_title",
+        }.get(initial, "nav_" + initial)
         item = self._nav_items.get(initial_key)
         if item is not None:
             self._nav_view.selected_item = item
@@ -471,6 +481,10 @@ class ConfiguratorApp(Application, IXamlMetadataProvider):
         save_btn = self._nav_view.find_name("SaveButton").as_(Button)
         self._save_button = save_btn
         later_btn = self._nav_view.find_name("LaterButton").as_(Button)
+        from ui.motion import instrument_button
+
+        instrument_button(save_btn)
+        instrument_button(later_btn)
 
         # Set translated title
         self._unsaved_infobar.title = t("unsaved_footer")
@@ -574,6 +588,8 @@ class ConfiguratorApp(Application, IXamlMetadataProvider):
             "widgets": "nav_widgets",
             "styles": "nav_styles",
             "environment": "nav_environment",
+            "history": "history_title",
+            "community": "community_manager_title",
             "backup": "nav_backup",
             "app_settings": "nav_settings",
         }
@@ -648,11 +664,20 @@ class ConfiguratorApp(Application, IXamlMetadataProvider):
                 "styles": self._styles_page.show,
                 "environment": self._env_page.show,
                 "app_settings": self._app_settings_page.show,
+                "history": self._history_page.show,
+                "community": self._community_page.show,
             }
 
             handler = routes.get(tag)
             if handler:
+                previous = self._content_area.content
                 handler()
+                if self._content_area.content != previous:
+                    from ui.motion import PageMotion
+
+                    if self._navigation_motion is None:
+                        self._navigation_motion = PageMotion(self._content_area)
+                    self._navigation_motion.play()
         except Exception as e:
             error(f"Navigation error: {e}", exc_info=True)
 
@@ -678,19 +703,34 @@ class ConfiguratorApp(Application, IXamlMetadataProvider):
         except Exception as e:
             error(f"Footer action error: {e}", exc_info=True)
 
-    def _save_config(self, on_saved=None):
+    def _save_config(self, on_saved=None, approved=None):
         """Save configuration to disk - only saves what has changed."""
         if self._saving:
             return
+        manager = self._config_manager
+        filenames = (["config.yaml"] if self._unsaved_config else []) + (["styles.css"] if self._unsaved_styles else [])
+        if hasattr(manager, "external_changes"):
+            try:
+                changed = manager.external_changes(filenames)
+            except OSError as exc:
+                self._show_save_error(str(exc))
+                return
+            if any(name not in (approved or {}) or approved[name] != version for name, version in changed.items()):
+                self._show_external_conflict(on_saved)
+                return
 
         def finish(content=None):
             try:
-                if self._unsaved_config and not self._config_manager.save_config():
+                if self._unsaved_config and not (
+                    manager.save_config(approved=approved) if approved else manager.save_config()
+                ):
                     raise OSError(t("save_config_failed"))
                 if self._unsaved_styles:
                     if not isinstance(content, str):
                         raise ValueError(t("save_editor_not_ready"))
-                    if not self._config_manager.save_styles(content):
+                    if not (
+                        manager.save_styles(content, approved=approved) if approved else manager.save_styles(content)
+                    ):
                         raise OSError(t("save_styles_failed"))
                 self.mark_saved()
                 if on_saved and not self._unsaved_changes:
@@ -699,7 +739,10 @@ class ConfiguratorApp(Application, IXamlMetadataProvider):
             except Exception as exc:
                 error(f"Save error: {exc}", exc_info=True)
                 self.mark_saved()  # Recompute each file separately after partial success.
-                self._show_save_error(str(exc))
+                if getattr(manager, "last_conflict", None):
+                    self._show_external_conflict(on_saved)
+                else:
+                    self._show_save_error(str(exc))
             finally:
                 self._saving = False
                 self._save_button.is_enabled = True
@@ -747,6 +790,75 @@ class ConfiguratorApp(Application, IXamlMetadataProvider):
             error(f"Save error: {e}", exc_info=True)
             self._show_save_error(str(e))
 
+    def _reload_disk_file(self, filename):
+        """Reload one file without discarding the other file's unsaved work."""
+        if filename == "config.yaml":
+            self._config_manager.load_config()
+            self._widgets_page.reload_registry()
+        else:
+            content = self._config_manager.load_styles()
+            self._styles_page._draft_content = content
+            self._styles_page._pending_content = content
+            if self._styles_webview and self._styles_page._editor_ready:
+                self._styles_webview.execute_script_async(f"setContent({json.dumps(content)})")
+        self.mark_saved()
+
+    def _show_external_conflict(self, on_saved=None):
+        from pathlib import Path
+
+        from core.advanced_config import dump_mapping
+        from core.file_history import unified_diff
+        from winui3.microsoft.ui.xaml.controls import ScrollViewer, TextBox
+
+        filenames = (["config.yaml"] if self._unsaved_config else []) + (["styles.css"] if self._unsaved_styles else [])
+        changed = self._config_manager.external_changes(filenames)
+        dialog = self.create_dialog(
+            '<ContentDialog xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" '
+            f'Title="{UIFactory.escape_xml(t("history_conflict_title"))}" '
+            f'PrimaryButtonText="{UIFactory.escape_xml(t("history_overwrite"))}" '
+            f'SecondaryButtonText="{UIFactory.escape_xml(t("history_reload"))}" '
+            f'CloseButtonText="{UIFactory.escape_xml(t("common_cancel"))}" DefaultButton="Close"/>'
+        )
+        body = UIFactory.create_stack_panel()
+        body.children.append(UIFactory.create_text_block(t("history_conflict_hint"), wrap=True))
+        differences = []
+        for filename in changed:
+            path = Path(
+                self._config_manager.config_path if filename == "config.yaml" else self._config_manager.styles_path
+            )
+            before = path.read_text(encoding="utf-8") if path.exists() else ""
+            after = (
+                dump_mapping(self._config_manager.config)
+                if filename == "config.yaml"
+                else (self._styles_page._draft_content or "")
+            )
+            differences.append(unified_diff(before, after, filename + " (disk)", filename + " (GUI)"))
+        textbox = TextBox()
+        textbox.accepts_return = True
+        textbox.is_read_only = True
+        textbox.text = "\n\n".join(differences)
+        viewer = ScrollViewer()
+        viewer.max_height = 320
+        viewer.content = textbox
+        body.children.append(viewer)
+        dialog.content = body
+
+        def closed(sender, args):
+            if args.result == ContentDialogButton.PRIMARY:
+                self._save_config(on_saved=on_saved, approved=changed)
+            elif args.result == ContentDialogButton.SECONDARY:
+                try:
+                    for filename in changed:
+                        self._reload_disk_file(filename)
+                    self._on_nav_selection_changed(
+                        None, type("Selection", (), {"selected_item": self._nav_view.selected_item})()
+                    )
+                except Exception as exc:
+                    self._show_save_error(str(exc))
+
+        dialog.add_closed(closed)
+        dialog.show_async()
+
     def _show_save_error(self, message):
         dialog = self.create_dialog(
             '<ContentDialog xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" '
@@ -755,6 +867,23 @@ class ConfiguratorApp(Application, IXamlMetadataProvider):
             f'<TextBlock Text="{UIFactory.escape_xml(message)}" TextWrapping="Wrap"/></ContentDialog>'
         )
         dialog.show_async()
+
+    def stage_button_styles(self):
+        """Keep generated button styles in the same draft and save flow as user CSS."""
+        from core.button_defaults import ensure_button_css
+
+        page = self._styles_page
+        current = page._draft_content
+        if current is None:
+            current = self._config_manager.load_styles()
+        content = ensure_button_css(current)
+        if content == current:
+            return
+        if page._editor_ready and page._webview:
+            page._webview.execute_script_async(f"setFormattedContent({json.dumps(content)})")
+        page._draft_content = content
+        page._pending_content = content
+        self.mark_unsaved("styles", current_styles=content)
 
     def mark_unsaved(self, change_type="config", current_styles=None):
         """Mark unsaved changes, checking if content actually differs from original.

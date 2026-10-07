@@ -44,6 +44,12 @@
                     <FontIcon Glyph="&#xE943;"/>
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
+            <NavigationViewItem Content="History" Tag="history">
+                <NavigationViewItem.Icon><FontIcon Glyph="&#xE81C;"/></NavigationViewItem.Icon>
+            </NavigationViewItem>
+            <NavigationViewItem Content="Community" Tag="community">
+                <NavigationViewItem.Icon><FontIcon Glyph="&#xEA86;"/></NavigationViewItem.Icon>
+            </NavigationViewItem>
             <NavigationViewItem Content="Backup Config" Tag="backup" SelectsOnInvoked="False">
                 <NavigationViewItem.Icon>
                     <FontIcon Glyph="&#xE74E;"/>
@@ -71,11 +77,6 @@
                             HorizontalContentAlignment="Stretch" 
                             VerticalContentAlignment="Stretch"
                             Visibility="Collapsed">
-                <ContentControl.ContentTransitions>
-                    <TransitionCollection>
-                        <EntranceThemeTransition FromVerticalOffset="50" IsStaggeringEnabled="False"/>
-                    </TransitionCollection>
-                </ContentControl.ContentTransitions>
             </ContentControl>
             
             <!-- Floating InfoBar - overlays content at bottom -->

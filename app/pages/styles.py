@@ -69,7 +69,9 @@ class StylesPage:
             reload_btn.add_click(lambda s, e: self.reload_from_disk())
             header_panel.children.append(reload_btn)
 
-            css_content = self._config_manager.load_styles()
+            css_content = self._draft_content
+            if css_content is None:
+                css_content = self._config_manager.load_styles()
             self._pending_content = css_content
             self._draft_content = css_content
 

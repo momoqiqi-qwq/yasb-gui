@@ -125,6 +125,10 @@ class ConfigManager:
         self._config_path: str = ""
         self._styles_path: str = ""
         self._init_paths()
+        self._disk_versions = {
+            Path(path).name: self._file_fingerprint(path) for path in (self._config_path, self._styles_path)
+        }
+        self.last_conflict = None
 
     def _init_paths(self):
         """Set up config file paths."""
@@ -159,18 +163,20 @@ class ConfigManager:
         """Load config from file (or create default if missing)."""
         if not os.path.isfile(self._config_path):
             self._config = self._get_default_config()
-            self.save_config()
+            if not self.save_config():
+                raise OSError("Could not create configuration")
             self._original_config = json.dumps(_normalize(self._config), sort_keys=True)
             return self._config
 
-        with open(self._config_path, "r", encoding="utf-8") as f:
-            y = _get_yaml()
-            self._config = y.load(f) or {}
+        raw = Path(self._config_path).read_bytes()
+        y = _get_yaml()
+        self._config = y.load(raw.decode("utf-8")) or {}
 
         self._original_config = json.dumps(_normalize(self._config), sort_keys=True)
+        self._disk_versions["config.yaml"] = hashlib.sha256(raw).hexdigest()
         return self._config
 
-    def save_config(self) -> bool:
+    def save_config(self, approved=None) -> bool:
         """Write config to file."""
         try:
             sorted_config = _sort_root_keys(self._config)
@@ -187,7 +193,7 @@ class ConfigManager:
                 f"# yaml-language-server: $schema={self._schema_url()}",
                 content,
             )
-            self._write_with_backup(self._config_path, content)
+            self._write_with_backup(self._config_path, content, approved=approved)
 
             self._original_config = json.dumps(_normalize(self._config), sort_keys=True)
             return True
@@ -211,17 +217,45 @@ class ConfigManager:
         identity = hashlib.sha256(str(Path(self._config_dir).resolve()).encode()).hexdigest()[:12]
         return Path(APP_DATA_DIR) / "backups" / identity
 
-    def _write_with_backup(self, path, content):
+    @staticmethod
+    def _file_fingerprint(path):
+        from core.file_history import fingerprint
+
+        return fingerprint(path)
+
+    def external_changes(self, filenames):
+        paths = {"config.yaml": self._config_path, "styles.css": self._styles_path}
+        return {
+            name: version
+            for name in filenames
+            if (version := self._file_fingerprint(paths[name])) != self._disk_versions.get(name)
+        }
+
+    def _check_disk_version(self, path, approved):
+        from core.file_history import ExternalFileChange
+
+        current = self._file_fingerprint(path)
+        if current != self._disk_versions.get(path.name) and (
+            not approved or path.name not in approved or approved[path.name] != current
+        ):
+            self.last_conflict = path.name
+            raise ExternalFileChange(path.name)
+
+    def _write_with_backup(self, path, content, approved=None, force_backup=False):
         prefs = get_preferences()
         path = Path(path)
+        self.last_conflict = None
+        self._check_disk_version(path, approved)
         backup_dir = self.backup_directory
-        if prefs.get("backup_before_save", True) and path.is_file():
+        if (force_backup or prefs.get("backup_before_save", True)) and path.is_file():
             backup_dir.mkdir(parents=True, exist_ok=True)
             name = f"{path.name}.{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}.bak"
             shutil.copy2(path, backup_dir / name)
+        self._check_disk_version(path, approved)
         atomic_write_text(path, content)
+        self._disk_versions[path.name] = self._file_fingerprint(path)
         # Only prune this application's snapshots for this config directory and file.
-        if prefs.get("backup_before_save", True) and backup_dir.is_dir():
+        if (force_backup or prefs.get("backup_before_save", True)) and backup_dir.is_dir():
             count = prefs.get("backup_retention", 10)
             count = count if isinstance(count, int) and 1 <= count <= 100 else 10
             for old in sorted(backup_dir.glob(f"{path.name}.*.bak"), reverse=True)[count:]:
@@ -239,16 +273,18 @@ class ConfigManager:
         """Load CSS from styles.css."""
         if not os.path.isfile(self._styles_path):
             self._original_styles = ""
+            self._disk_versions["styles.css"] = None
             return ""
-        with open(self._styles_path, "r", encoding="utf-8") as f:
-            content = f.read()
-            self._original_styles = content
-            return content
+        raw = Path(self._styles_path).read_bytes()
+        content = raw.decode("utf-8")
+        self._original_styles = content
+        self._disk_versions["styles.css"] = hashlib.sha256(raw).hexdigest()
+        return content
 
-    def save_styles(self, content: str) -> bool:
+    def save_styles(self, content: str, approved=None) -> bool:
         """Write CSS to styles.css."""
         try:
-            self._write_with_backup(self._styles_path, content)
+            self._write_with_backup(self._styles_path, content, approved=approved)
             self._original_styles = content
             return True
         except Exception as e:

@@ -5,11 +5,12 @@ import sys
 from pathlib import Path
 
 # Application metadata
-APP_VERSION = "0.2.0"
+APP_VERSION = "0.4.0"
 DEFAULT_SETTINGS = {
     "language": "zh_CN",
     "theme": "default",
     "backdrop": "mica",
+    "ui_animations": True,
     "startup_page": "global",
     "backup_before_save": True,
     "backup_retention": 10,

@@ -1,5 +1,6 @@
 """Editable command and keyboard templates validated against official YASB schemas."""
 
+from core.command_presets import command_button_templates
 from core.localization import t
 from core.yasb_schema import make_defaults, widget_schemas
 
@@ -41,4 +42,4 @@ def command_templates():
                 "doc_link": "https://docs.yasb.dev/latest/widgets/custom",
             }
         )
-    return templates
+    return templates + command_button_templates()
