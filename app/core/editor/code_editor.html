@@ -432,8 +432,6 @@
         function initEditor(options) {
             if (!editor) return;
             
-            const startTime = Date.now();
-            
             if (options.theme) setTheme(options.theme);
             if (options.language) setLanguage(options.language);
             if (options.fontFamily || options.fontSize) setFont(options.fontFamily, options.fontSize);
@@ -441,15 +439,9 @@
             if (options.content !== undefined) setContent(options.content);
             if (options.focus) editor.focus();
             
-            // Calculate delay to meet minimum display time
-            const elapsed = (options.elapsedMs || 0) + (Date.now() - startTime);
-            const delay = Math.max(0, (options.minTotalMs || 1700) - elapsed);
-            
-            setTimeout(function() {
-                if (window.chrome && window.chrome.webview) {
-                    window.chrome.webview.postMessage({ type: 'initialized' });
-                }
-            }, delay);
+            if (window.chrome && window.chrome.webview) {
+                window.chrome.webview.postMessage({ type: 'initialized' });
+            }
         }
 
         function formatContent() {
@@ -475,6 +467,70 @@
                 if (pos) editor.setPosition(pos);
             }
         }
+
+        function stripCssComments(content) {
+            let output = '', quote = '', inUrl = false;
+            for (let i = 0; i < content.length;) {
+                const char = content[i];
+                // Escaped delimiters are literal in strings, identifiers and URLs.
+                if (char === '\\') {
+                    output += content.slice(i, i + 2);
+                    i += 2;
+                    continue;
+                }
+                if (quote) {
+                    output += char;
+                    if (char === quote) quote = '';
+                    i++;
+                    continue;
+                }
+                if (char === '"' || char === "'") {
+                    quote = char;
+                    output += char;
+                    i++;
+                    continue;
+                }
+                // Unquoted url() values may contain literal comment delimiters.
+                if (!inUrl && content.slice(i, i + 4).toLowerCase() === 'url('
+                    && !/[\w\-\u0080-\uFFFF]/.test(content[i - 1] || '')) {
+                    inUrl = true;
+                    output += content.slice(i, i + 4);
+                    i += 4;
+                    continue;
+                }
+                if (inUrl) {
+                    output += char;
+                    if (char === ')') inUrl = false;
+                    i++;
+                    continue;
+                }
+                if (char === '/' && content[i + 1] === '*') {
+                    const end = content.indexOf('*/', i + 2);
+                    // Preserve malformed trailing input rather than deleting user text.
+                    if (end < 0) return output + content.slice(i);
+                    const before = output.at(-1) || '', after = content[end + 2] || '';
+                    // Keep an empty comment where removal could merge CSS tokens.
+                    const identifier = /[\w\-\u0080-\uFFFF\\]/;
+                    if ((identifier.test(before) && (identifier.test(after) || after === '('))
+                        || (/[#@]/.test(before) && identifier.test(after))
+                        || (/[.+-]/.test(before) && /\d/.test(after))
+                        || (/[\d+-]/.test(before) && after === '.' && /\d/.test(content[end + 3] || ''))
+                        || (before === '/' && after === '*')) output += '/**/';
+                    i = end + 2;
+                    continue;
+                }
+                output += char;
+                i++;
+            }
+            return output;
+        }
+
+        function cleanupCss() {
+            if (!editor || currentLanguage !== 'css') return;
+            const content = editor.getValue(), cleaned = stripCssComments(content);
+            if (cleaned !== content) setFormattedContent(cleaned);
+        }
+        window.cleanupCss = cleanupCss;
 
         let errorDecorations = [];
         

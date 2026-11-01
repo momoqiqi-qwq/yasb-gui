@@ -5,6 +5,7 @@ Downloads the widget registry from yasb-gui-registry and widget schemas
 from the main YASB repo. Tracks update timestamps.
 """
 
+import ctypes
 import datetime
 import json
 import platform
@@ -14,17 +15,20 @@ import threading
 import urllib.request
 from pathlib import Path
 from typing import Optional, Tuple
+from urllib.parse import urlparse
 
 from core.constants import (
     APP_ID,
     APP_VERSION,
     GITHUB_REGISTRY,
     GITHUB_RELEASES_API,
+    IS_EXECUTABLE,
     REGISTRY_FILE,
     UPDATE_CHECK_INTERVAL_MINUTES,
     UPDATE_METADATA_FILE,
 )
 from core.errors import get_friendly_error_message
+from core.file_io import atomic_write_text
 from core.logger import error, info
 from core.schema_fetcher import update_schema_database
 
@@ -174,6 +178,34 @@ class AppUpdater:
     def __init__(self):
         self._metadata_path = UPDATE_METADATA_FILE
 
+    def is_msix_install(self) -> bool:
+        """Use the current process's package identity, not just its frozen flag."""
+        if not IS_EXECUTABLE:
+            return False
+        try:
+            length = ctypes.c_uint32()
+            result = ctypes.windll.kernel32.GetCurrentPackageFullName(ctypes.byref(length), None)
+            return result == 122 and length.value > 0  # ERROR_INSUFFICIENT_BUFFER
+        except AttributeError, OSError:
+            return False
+
+    def can_install_update(self, url: str) -> bool:
+        return self.is_msix_install() and urlparse(url).path.lower().endswith(".msixbundle")
+
+    def _select_download(self, release, version):
+        assets = {asset.get("name"): asset.get("browser_download_url") for asset in release.get("assets", [])}
+        if self.is_msix_install():
+            publisher_id = APP_ID.split("_")[1]
+            return assets.get(f"YASB.GUI_{version}_{publisher_id}.msixbundle")
+        arch = self._get_system_arch()
+        arches = ("arm64", "aarch64") if arch == "aarch64" else ("x64",)
+        for extension in ("exe", "zip"):
+            for architecture in arches:
+                url = assets.get(f"YASB-GUI-{version}-{architecture}-portable.{extension}")
+                if url:
+                    return url
+        return None
+
     def _get_system_arch(self) -> str:
         """Detect system architecture (x64 or aarch64)."""
         machine = platform.machine().lower()
@@ -244,8 +276,8 @@ class AppUpdater:
                 data.pop("available_update_version", None)
                 data.pop("available_update_url", None)
 
-            with open(self._metadata_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2)
+            self._metadata_path.parent.mkdir(parents=True, exist_ok=True)
+            atomic_write_text(self._metadata_path, json.dumps(data, indent=2))
         except Exception as e:
             error(f"Failed to save app update metadata: {e}")
 
@@ -287,7 +319,10 @@ class AppUpdater:
                 version = data.get("available_update_version")
                 url = data.get("available_update_url")
 
-                if version and url:
+                packaged = self.is_msix_install()
+                suffix = urlparse(url).path.lower() if isinstance(url, str) else ""
+                compatible = suffix.endswith(".msixbundle") if packaged else suffix.endswith((".exe", ".zip"))
+                if version and url and compatible and self._compare_versions(APP_VERSION, version):
                     return (version, url)
         except Exception:
             pass
@@ -364,8 +399,13 @@ class AppUpdater:
                 self._save_metadata(check_time=True)
                 return True, "No updates available", None, None
 
-            # Get the latest release (first in list)
-            latest_release = releases[0]
+            # Ignore drafts and prereleases for the stable application channel.
+            latest_release = next(
+                (item for item in releases if not item.get("draft") and not item.get("prerelease")), None
+            )
+            if latest_release is None:
+                self._save_metadata(check_time=True)
+                return True, "No updates available", None, None
             latest_version = latest_release.get("tag_name", "").lstrip("v")
 
             info(f"Latest release: {latest_version}, Current: {APP_VERSION}")
@@ -376,19 +416,12 @@ class AppUpdater:
                 self._save_metadata(check_time=True)
                 return True, "You are on the latest version", None, None
 
-            # Find msixbundle asset (extract publisher ID from APP_ID)
-            publisher_id = APP_ID.split("_")[1]
-            bundle_name = f"YASB.GUI_{latest_version}_{publisher_id}.msixbundle"
-
-            download_url = None
-            for asset in latest_release.get("assets", []):
-                if asset.get("name") == bundle_name:
-                    download_url = asset.get("browser_download_url")
-                    break
+            download_url = self._select_download(latest_release, latest_version)
 
             if not download_url:
-                error(f"Could not find {bundle_name}")
-                return False, "No installer found", None, None
+                self._save_metadata(check_time=True)
+                error(f"Could not find a compatible download for {latest_version}")
+                return False, "No compatible download found", None, None
 
             # Save update info
             self._save_metadata(check_time=True, version=latest_version, url=download_url)
@@ -449,13 +482,16 @@ class AppUpdater:
         Install app update using MSIX package.
         Returns (success, message).
         """
+        if not self.can_install_update(installer_path):
+            return False, "Portable updates must be downloaded and opened manually"
         try:
             info(f"Installing update from {installer_path}")
             self._save_metadata(check_time=False)
-            ps_script = f"""
+            escaped_path = installer_path.replace("'", "''")
+            ps_script = rf"""
 $ErrorActionPreference = 'Stop'
 try {{
-    Add-AppxPackage -Path '{installer_path}' -ForceApplicationShutdown
+    Add-AppxPackage -Path '{escaped_path}' -ForceApplicationShutdown
     Start-Sleep -Seconds 2
     Start-Process 'shell:AppsFolder\{APP_ID}!App'
 }} catch {{

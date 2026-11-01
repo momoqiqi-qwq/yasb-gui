@@ -4,7 +4,13 @@
     <Grid.RenderTransform>
         <TranslateTransform x:Name="ContainerTransform"/>
     </Grid.RenderTransform>
-    <Button x:Name="MainButton" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="12,8">
+    <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto"/>
+        <ColumnDefinition Width="*"/>
+    </Grid.ColumnDefinitions>
+    <CheckBox x:Name="SelectCheckBox" MinWidth="32" Margin="4,0,4,0" VerticalAlignment="Center"
+              AutomationProperties.Name="{select_label}"/>
+    <Button x:Name="MainButton" Grid.Column="1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="12,8">
         <Grid>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>

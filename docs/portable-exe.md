@@ -1,6 +1,6 @@
 # 单文件便携 EXE
 
-`YASB-GUI-0.4.0-x64-portable.exe` 可以单独复制运行，无需手动解压或安装 Python。与旧的 `YASB-GUI-0.4.0-x64.exe` 不同，它内置完整冻结程序目录：Python 3.14、VC++ DLL、Python 扩展、JSON Schema 数据、中文资源、Monaco、XAML 和社区扩展。
+`YASB-GUI-0.4.1-x64-portable.exe` 可以单独复制运行，无需手动解压或安装 Python。与旧的 `YASB-GUI-0.4.0-x64.exe` 不同，它内置完整冻结程序目录：Python 3.14、VC++ DLL、Python 扩展、JSON Schema 数据、中文资源、Monaco、XAML 和社区扩展。
 
 首次启动把资源展开到 `%LOCALAPPDATA%/YASB-GUI/portable/<内容哈希>/`。每次启动校验内置 ZIP 和每个文件的 SHA256，缺失或损坏的缓存文件自动修复；不同包使用独立缓存。无需管理员权限。应用偏好与备份仍使用现有用户数据目录，YASB 配置保持原位置。因此这是免安装的单文件发行包，不是把所有用户数据随 EXE 带走的模式。
 
@@ -26,7 +26,7 @@ Windows App Runtime 和 WebView2 是共享系统运行库，未内置于此 EXE�
 脚本检查关键资源、生成全量哈希清单并编译 x64 启动器，拒绝覆盖已有 EXE 或校验文件。构建需要 Windows 自带的 .NET Framework C# 编译器。
 
 ```powershell
-Start-Process ./YASB-GUI-0.4.0-x64-portable.exe -ArgumentList '--check' -Wait
+Start-Process ./YASB-GUI-0.4.1-x64-portable.exe -ArgumentList '--check' -Wait
 ```
 
 `--check` 展开/校验文件并检查系统运行库，不启动 GUI；在 EXE 同目录写入 `portable-check.txt`，退出码 0 为成功。该目录需要可写。普通双击不会创建此报告。

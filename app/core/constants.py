@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 # Application metadata
-APP_VERSION = "0.4.0"
+APP_VERSION = "0.4.1"
 DEFAULT_SETTINGS = {
     "language": "zh_CN",
     "theme": "default",

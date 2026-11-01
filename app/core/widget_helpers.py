@@ -9,6 +9,7 @@ import copy
 from io import StringIO
 
 from core.logger import error
+from core.widget_management import POSITIONS, apply_widget_action
 from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
@@ -35,7 +36,7 @@ def parse_yaml(text: str) -> tuple[dict | None, str | None]:
             return {}, None
         if not isinstance(parsed, dict):
             return None, "YAML must be a dictionary"
-        return dict(parsed), None
+        return parsed, None
     except YAMLError as e:
         if hasattr(e, "problem_mark") and e.problem_mark:
             mark = e.problem_mark
@@ -74,7 +75,10 @@ def extract_widget_options(data: dict, expected_type: str | None = None) -> tupl
             expected_short = expected_type.split(".")[-1] if "." in expected_type else expected_type
             return None, f"Widget type mismatch. You pasted config for '{pasted_short}' but editing '{expected_short}'."
 
-        return dict(data.get("options") or {}), None
+        options = data.get("options")
+        if options is not None and not isinstance(options, dict):
+            return None, "Widget options must be a dictionary"
+        return options if options is not None else {}, None
 
     # Check if wrapped in widget name: {name: {type: ..., options: ...}}
     if len(data) == 1:
@@ -99,7 +103,10 @@ def extract_widget_options(data: dict, expected_type: str | None = None) -> tupl
                     f"Widget type mismatch. You pasted config for '{pasted_short}' but editing '{expected_short}'.",
                 )
 
-            return dict(value.get("options") or {}), None
+            options = value.get("options")
+            if options is not None and not isinstance(options, dict):
+                return None, "Widget options must be a dictionary"
+            return options if options is not None else {}, None
         # Single key but NOT a valid widget definition - likely malformed paste
         if isinstance(value, dict) and ("type" in value or "options" in value):
             return None, f"Invalid widget structure under '{key}'. Expected both 'type' and 'options' keys."
@@ -148,19 +155,16 @@ def move_widget(config_manager, bar_name, widget_name, old_position, new_positio
     """Move widget to a different position."""
     try:
         bar = config_manager.get_bar(bar_name)
-        if not bar:
+        if not bar or old_position not in POSITIONS or old_position == new_position:
             return False
-
         widgets = bar.get("widgets", {})
-
-        if old_position in widgets and widget_name in widgets[old_position]:
-            widgets[old_position].remove(widget_name)
-
-        if new_position not in widgets:
-            widgets[new_position] = []
-        widgets[new_position].append(widget_name)
-
-        return True
+        if not isinstance(widgets, dict) or widget_name not in (widgets.get(old_position) or []):
+            return False
+        return bool(
+            apply_widget_action(
+                config_manager, bar_name, [widget_name], "move", new_position, source_position=old_position
+            )
+        )
     except Exception as e:
         error(f"Move widget error: {e}", exc_info=True)
         return False
@@ -169,33 +173,10 @@ def move_widget(config_manager, bar_name, widget_name, old_position, new_positio
 def duplicate_widget(config_manager, bar_name, widget_name, position):
     """Duplicate a widget."""
     try:
-        original_name = widget_name[1:] if widget_name.startswith("#") else widget_name
-        widget = config_manager.get_widget(original_name)
-        if not widget:
+        if position is not None and position not in POSITIONS:
             return None
-
-        # Create unique name
-        existing = config_manager.get_widgets()
-        counter = 1
-        new_name = f"{original_name}_{counter}"
-        while new_name in existing:
-            counter += 1
-            new_name = f"{original_name}_{counter}"
-
-        config_manager.config["widgets"][new_name] = copy.deepcopy(widget)
-
-        # Add to bar after original
-        bar = config_manager.get_bar(bar_name)
-        if bar:
-            widgets = bar.get("widgets", {})
-            if position not in widgets:
-                widgets[position] = []
-            idx = (
-                widgets[position].index(widget_name) + 1 if widget_name in widgets[position] else len(widgets[position])
-            )
-            widgets[position].insert(idx, new_name)
-
-        return new_name
+        names = apply_widget_action(config_manager, bar_name, [widget_name], "duplicate", source_position=position)
+        return names[0] if names else None
     except Exception as e:
         error(f"Duplicate widget error: {e}", exc_info=True)
         return None
@@ -204,15 +185,9 @@ def duplicate_widget(config_manager, bar_name, widget_name, position):
 def disable_widget(config_manager, bar_name, widget_name, position):
     """Disable a widget by removing it from the bar (keeps config)."""
     try:
-        bar = config_manager.get_bar(bar_name)
-        if not bar:
+        if position not in POSITIONS:
             return False
-
-        widgets = bar.get("widgets", {})
-        if position in widgets and widget_name in widgets[position]:
-            widgets[position].remove(widget_name)
-            return True
-        return False
+        return bool(apply_widget_action(config_manager, bar_name, [widget_name], "disable", source_position=position))
     except Exception as e:
         error(f"Disable widget error: {e}", exc_info=True)
         return False
@@ -224,14 +199,7 @@ def delete_widget(config_manager, bar_name, widget_name, position):
         if not bar_name:
             return False
 
-        bar = config_manager.get_bar(bar_name)
-        if bar:
-            widgets = bar.get("widgets", {})
-            if position in widgets and widget_name in widgets[position]:
-                widgets[position].remove(widget_name)
-
-        config_manager.delete_widget(widget_name)
-        return True
+        return config_manager.delete_widget(widget_name)
     except Exception as e:
         error(f"Delete widget error: {e}", exc_info=True)
         return False
@@ -240,16 +208,7 @@ def delete_widget(config_manager, bar_name, widget_name, position):
 def enable_widget(config_manager, bar_name, widget_name, position):
     """Enable a widget by adding it to a bar position."""
     try:
-        bar = config_manager.get_bar(bar_name)
-        if not bar:
-            return False
-
-        widgets = bar.get("widgets", {})
-        if position not in widgets:
-            widgets[position] = []
-
-        widgets[position].append(widget_name)
-        return True
+        return bool(apply_widget_action(config_manager, bar_name, [widget_name], "move", position))
     except Exception as e:
         error(f"Enable widget error: {e}", exc_info=True)
         return False
@@ -258,8 +217,7 @@ def enable_widget(config_manager, bar_name, widget_name, position):
 def delete_disabled_widget(config_manager, widget_name):
     """Delete a disabled widget from config entirely."""
     try:
-        config_manager.delete_widget(widget_name)
-        return True
+        return config_manager.delete_widget(widget_name)
     except Exception as e:
         error(f"Delete disabled widget error: {e}", exc_info=True)
         return False
@@ -319,7 +277,7 @@ def add_widget_to_bar(config_manager, bar_name, widget_info, position):
 
         config_manager.config["widgets"][name] = {
             "type": widget_info["type_path"],
-            "options": widget_info["defaults"].copy() if widget_info["defaults"] else {},
+            "options": copy.deepcopy(widget_info["defaults"]) if widget_info["defaults"] else {},
         }
 
         if "widgets" not in bar:

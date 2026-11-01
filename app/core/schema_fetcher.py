@@ -14,52 +14,70 @@ from typing import Any
 
 from core.constants import SCHEMA_DB_PATH
 from core.errors import get_friendly_error_message
+from core.file_io import atomic_write_text
 from core.logger import error, info
+from core.yasb_schema import STABLE_VERSION, profile
 
 SCHEMA_JSON_URL = "https://raw.githubusercontent.com/amnweb/yasb/refs/heads/main/schema.json"
 
 
-def get_schema_db_path() -> Path:
-    return SCHEMA_DB_PATH
+def _schema_source(selected):
+    if selected == "development":
+        return SCHEMA_JSON_URL
+    version = "v2.0.6" if selected == "v2_0_6" else STABLE_VERSION
+    return f"https://raw.githubusercontent.com/amnweb/yasb/{version}/schema.json"
+
+
+def get_schema_db_path(selected=None) -> Path:
+    selected = selected or profile()
+    if selected not in ("stable", "v2_0_6", "development"):
+        raise ValueError("Unknown schema profile")
+    return SCHEMA_DB_PATH.with_name(f"{SCHEMA_DB_PATH.stem}.{selected}{SCHEMA_DB_PATH.suffix}")
+
+
+def _cache_matches(database, selected):
+    meta = database.get("_meta", {})
+    return (
+        isinstance(meta, dict)
+        and meta.get("version") == 2
+        and meta.get("profile") == selected
+        and meta.get("source") == _schema_source(selected)
+    )
 
 
 def is_database_valid() -> bool:
-    db = load_schema_database()
-    return bool(db.get("widgets"))
+    selected = profile()
+    db = load_schema_database(selected)
+    return _cache_matches(db, selected) and bool(db.get("widgets"))
 
 
-def load_schema_database() -> dict[str, Any]:
+def load_schema_database(selected=None) -> dict[str, Any]:
     try:
-        if SCHEMA_DB_PATH.exists():
-            with open(SCHEMA_DB_PATH, "r", encoding="utf-8") as f:
-                return json.load(f)
+        path = get_schema_db_path(selected)
+        if path.exists():
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict) and isinstance(data.get("widgets", {}), dict):
+                    return data
     except Exception as e:
         error(f"Failed to load schema database: {e}")
     return {}
 
 
-def save_schema_database(schemas: dict[str, Any]) -> bool:
+def save_schema_database(schemas: dict[str, Any], selected=None) -> bool:
     try:
-        SCHEMA_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(SCHEMA_DB_PATH, "w", encoding="utf-8") as f:
-            json.dump(schemas, f, indent=2)
+        path = get_schema_db_path(selected)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write_text(path, json.dumps(schemas, indent=2))
         return True
     except Exception as e:
         error(f"Failed to save schema database: {e}")
         return False
 
 
-def _download_schema_json(progress_callback=None) -> dict[str, Any] | None:
+def _download_schema_json(progress_callback=None, selected=None) -> dict[str, Any] | None:
     try:
-        from core.yasb_schema import STABLE_VERSION, profile
-
-        url = (
-            SCHEMA_JSON_URL
-            if profile() == "development"
-            else f"https://raw.githubusercontent.com/amnweb/yasb/{STABLE_VERSION}/schema.json"
-        )
-        if profile() == "v2_0_6":
-            url = "https://raw.githubusercontent.com/amnweb/yasb/v2.0.6/schema.json"
+        url = _schema_source(selected or profile())
         info(f"Downloading JSON schema from {url}...")
         req = urllib.request.Request(url, headers={"User-Agent": "YASB-Config/1.0"})
         with urllib.request.urlopen(req, timeout=60) as response:
@@ -230,11 +248,12 @@ def _extract_widget_option_schemas(schema_json: dict[str, Any]) -> dict[str, dic
     return widget_schemas
 
 
-def fetch_all_schemas(progress_callback=None) -> dict[str, Any]:
+def fetch_all_schemas(progress_callback=None, selected=None) -> dict[str, Any]:
     """Fetch all widget schemas from GitHub."""
-    schemas = {"_meta": {"version": 1, "source": SCHEMA_JSON_URL}, "widgets": {}}
+    selected = selected or profile()
+    schemas = {"_meta": {"version": 2, "profile": selected, "source": _schema_source(selected)}, "widgets": {}}
 
-    schema_json = _download_schema_json(progress_callback)
+    schema_json = _download_schema_json(progress_callback, selected=selected)
     if not schema_json:
         return schemas
 
@@ -259,7 +278,8 @@ def update_schema_database(progress_callback=None) -> tuple[bool, str]:
     """Update the local schema database from GitHub."""
     try:
         info("Starting schema database update...")
-        schemas = fetch_all_schemas(progress_callback)
+        selected = profile()
+        schemas = fetch_all_schemas(progress_callback, selected=selected)
 
         widget_count = len(schemas.get("widgets", {}))
         if widget_count == 0:
@@ -268,7 +288,7 @@ def update_schema_database(progress_callback=None) -> tuple[bool, str]:
 
         schemas["_meta"]["updated"] = datetime.now().isoformat()
 
-        if save_schema_database(schemas):
+        if save_schema_database(schemas, selected=selected):
             info(f"Schema database updated with {widget_count} widgets")
             return True, f"Successfully updated {widget_count} widget schemas"
         return False, "Failed to save schema database"
@@ -279,13 +299,15 @@ def update_schema_database(progress_callback=None) -> tuple[bool, str]:
 
 def get_widget_schema(widget_type: str) -> dict | None:
     """Get schema for a widget type."""
-    cached = load_schema_database().get("widgets", {}).get(widget_type)
-    if cached:
+    selected = profile()
+    database = load_schema_database(selected)
+    cached = database.get("widgets", {}).get(widget_type)
+    if _cache_matches(database, selected) and isinstance(cached, dict) and isinstance(cached.get("hierarchy"), dict):
         return cached
-    from core.yasb_schema import load_schema, profile, widget_schemas
+    from core.yasb_schema import load_schema, widget_schemas
 
-    node = widget_schemas().get(widget_type)
-    return {"hierarchy": _build_key_hierarchy(node, load_schema(profile())["$defs"])} if node else None
+    node = widget_schemas(selected).get(widget_type)
+    return {"hierarchy": _build_key_hierarchy(node, load_schema(selected)["$defs"])} if node else None
 
 
 def get_widget_key_hierarchy(widget_type: str) -> dict[str, dict]:
@@ -299,4 +321,10 @@ def get_widget_key_hierarchy(widget_type: str) -> dict[str, dict]:
 
 def get_all_widget_types() -> list[str]:
     """Get list of all known widget types."""
-    return list(load_schema_database().get("widgets", {}).keys())
+    from core.yasb_schema import widget_schemas
+
+    selected = profile()
+    database = load_schema_database(selected)
+    if _cache_matches(database, selected):
+        return list(database.get("widgets", {}))
+    return list(widget_schemas(selected))

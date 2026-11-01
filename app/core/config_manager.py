@@ -6,7 +6,6 @@ tracks changes, and provides import/export functionality.
 """
 
 import hashlib
-import json
 import os
 import re
 import shutil
@@ -26,22 +25,11 @@ from core.yasb_schema import STABLE_VERSION, profile
 from ruamel.yaml import YAML
 
 
-def _normalize(obj):
-    """Convert ruamel.yaml types to plain Python for comparison."""
-    if obj is None:
-        return None
-    if isinstance(obj, dict):
-        return {str(k): _normalize(v) for k, v in obj.items()}
-    if isinstance(obj, list):
-        return [_normalize(v) for v in obj]
-    type_name = type(obj).__name__
-    if type_name in ("ScalarBoolean", "bool"):
-        return bool(obj)
-    if type_name in ("ScalarInt", "int"):
-        return int(obj)
-    if type_name in ("ScalarFloat", "float"):
-        return float(obj)
-    return str(obj)
+def _config_snapshot(config):
+    """Compare round-trip YAML, including comments, quoting and scalar styles."""
+    stream = StringIO()
+    _get_yaml().dump(config, stream)
+    return stream.getvalue()
 
 
 def _get_yaml() -> YAML:
@@ -120,7 +108,7 @@ class ConfigManager:
 
     def __init__(self):
         self._config: dict[str, Any] = {}
-        self._original_config: str = "{}"  # JSON snapshot for change detection
+        self._original_config: str = _config_snapshot({})
         self._original_styles: str = ""  # Snapshot for change detection
         self._config_path: str = ""
         self._styles_path: str = ""
@@ -165,14 +153,14 @@ class ConfigManager:
             self._config = self._get_default_config()
             if not self.save_config():
                 raise OSError("Could not create configuration")
-            self._original_config = json.dumps(_normalize(self._config), sort_keys=True)
+            self._original_config = _config_snapshot(self._config)
             return self._config
 
         raw = Path(self._config_path).read_bytes()
         y = _get_yaml()
         self._config = y.load(raw.decode("utf-8")) or {}
 
-        self._original_config = json.dumps(_normalize(self._config), sort_keys=True)
+        self._original_config = _config_snapshot(self._config)
         self._disk_versions["config.yaml"] = hashlib.sha256(raw).hexdigest()
         return self._config
 
@@ -195,7 +183,7 @@ class ConfigManager:
             )
             self._write_with_backup(self._config_path, content, approved=approved)
 
-            self._original_config = json.dumps(_normalize(self._config), sort_keys=True)
+            self._original_config = _config_snapshot(self._config)
             return True
         except Exception as e:
             error(f"Error saving config: {e}")
@@ -266,7 +254,7 @@ class ConfigManager:
 
     def has_config_changed(self) -> bool:
         """Check if config was modified since loading."""
-        current = json.dumps(_normalize(self._config), sort_keys=True)
+        current = _config_snapshot(self._config)
         return current != self._original_config
 
     def load_styles(self) -> str:
@@ -325,8 +313,9 @@ class ConfigManager:
             widgets = bar.get("widgets") or {}
             for position in ["left", "center", "right"]:
                 pos_widgets = widgets.get(position) or []
-                if widget_name in pos_widgets:
-                    pos_widgets.remove(widget_name)
+                for index in range(len(pos_widgets) - 1, -1, -1):
+                    if pos_widgets[index] == widget_name:
+                        del pos_widgets[index]
         del self._config["widgets"][widget_name]
         return True
 

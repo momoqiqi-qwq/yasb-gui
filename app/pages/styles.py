@@ -6,7 +6,6 @@ Edits CSS stylesheets with Monaco editor.
 
 import json
 import subprocess
-import time
 import webbrowser
 from ctypes import WinError
 
@@ -36,7 +35,6 @@ class StylesPage:
         self._webview = None
         self._editor_ready = False
         self._pending_content = None
-        self._loader_start_time = None
         self._page = None
         self._draft_content = None
 
@@ -104,7 +102,6 @@ class StylesPage:
 
     def _init_webview(self):
         """Initialize WebView2 with async pattern."""
-        self._loader_start_time = time.time()
 
         # Create WebView2 environment with shared cache dir
         env_op = CoreWebView2Environment.create_with_options_async("", WEBVIEW_CACHE_DIR, None)
@@ -138,12 +135,7 @@ class StylesPage:
                     (
                         t("common_cleanup_css"),
                         "&#xEA99;",  # Broom icon
-                        """if(window.editor){
-                            var content = editor.getValue();
-                            // Remove block comments /* ... */
-                            content = content.replace(/\\/\\*[\\s\\S]*?\\*\\//g, '');
-                            editor.setValue(content);
-                        }""",
+                        "if(window.cleanupCss) cleanupCss();",
                     ),
                 ]
 
@@ -184,9 +176,6 @@ class StylesPage:
     def _init_editor_content(self):
         """Initialize editor with content after Monaco is ready."""
         try:
-            elapsed = time.time() - self._loader_start_time if self._loader_start_time else 0
-            elapsed_ms = int(elapsed * 1000)
-
             init_options = {
                 "theme": self._monaco_theme,
                 "language": "css",
@@ -194,8 +183,6 @@ class StylesPage:
                 "fontSize": self._editor_font_size,
                 "content": self._pending_content or "",
                 "focus": True,
-                "elapsedMs": elapsed_ms,
-                "minTotalMs": 1000,
                 "editorOptions": editor_options(),
             }
 

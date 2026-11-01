@@ -11,6 +11,7 @@
 - **用中文调整配置**：界面、组件名称、设置字段和 Monaco 编辑器命令提供简体中文支持。
 - **按版本编辑**：内置 YASB 2.0.6、2.0.7 和开发分支快照规则；正式版 57 种组件，开发快照 59 种组件。
 - **表单与代码编辑**：全局、状态栏和组件支持完整字段表单及高级 YAML；样式使用 CSS 编辑器。
+- **快速管理组件**：源码版支持按名称、类型或分类搜索，多选复制、添加/移动与当前栏停用；未启用组件也可复制。详见 [组件管理说明](docs/widget-management.md)。
 - **恢复与冲突保护**：备份历史支持差异预览和单文件恢复；外部文件变化时保存前提醒比较。
 - **扩展管理**：检查社区扩展的文件与依赖，重新配置路径及参数并保留自定义外观。详见 [GUI 增强说明](docs/gui-enhancements.md)。
 - **社区扩展**：设备连接状态、全屏/区域截图、Proton VPN 快捷入口，提供中文设置与程序路径选择。详见 [使用说明](docs/community-widgets.md)。
@@ -23,7 +24,7 @@
 
 ## 下载与运行
 
-新增本地 **v0.4.0 单文件便携 EXE**：`release-files/0.4.0/YASB-GUI-0.4.0-x64-portable.exe`。内置 Python、DLL 与程序资源，可单独复制运行，并在启动前校验文件和检查 Windows App Runtime 1.7 / WebView2。系统运行库仍需安装；缺失时提供中文提示。具体依赖、缓存位置及构建方法见 [便携 EXE 说明](docs/portable-exe.md)。该附件尚未发布到 GitHub Releases。
+新增 **v0.4.1 单文件便携 EXE**：`release-files/0.4.1/YASB-GUI-0.4.1-x64-portable.exe`。内置 Python、DLL 与程序资源，可单独复制运行，并在启动前校验文件和检查 Windows App Runtime 1.7 / WebView2。系统运行库仍需安装；缺失时提供中文提示。具体依赖、缓存位置及构建方法见 [便携 EXE 说明](docs/portable-exe.md)。旧版 v0.4.0 附件继续保留并单独发布。
 
 1. 在 Windows x64 上准备好 YASB 及其配置，并安装可用的 Windows App SDK Runtime 与 WebView2 Runtime。
 2. 下载 [v0.2.0 完整 ZIP](https://github.com/momoqiqi-qwq/yasb-gui/releases/download/v0.2.0/YASB-GUI-0.2.0-x64-portable.zip)，解压到独立目录。
@@ -45,8 +46,8 @@
 
 - `style: adaptive` 和 `style_adaptive_exclude` 属于内置开发快照，不属于 YASB 2.0.7 正式版。
 - 开发快照随本仓库版本提供，不代表始终同步远端 main。
-- 草稿暂不跨重启恢复；多文件联合保存和 schema 缓存同步仍待完善。
-- CSS 清理注释仍采用简单规则，应谨慎使用。
+- 草稿暂不跨重启恢复；多文件联合保存仍待完善。schema 层级缓存按目标版本隔离，表单与校验继续使用内置快照。
+- 源码中的 CSS 清理保护字符串与 URL，并保留撤销；必要时保留空注释 `/**/`，防止相邻 CSS 词法单元合并。已有便携附件尚未包含这些优化。
 - 编辑器桥接测试使用 Monaco 替身，完整 WebView 交互尚未端到端验证。
 
 ## 源码运行与构建
@@ -63,7 +64,7 @@ node tests/editor_smoke.cjs
 .venv/Scripts/python.exe app/scripts/package_release.py 0.2.0
 ```
 
-源码启动：`run.cmd`。构建输出：`dist/ygui.exe`。版本附件：`release-files/0.2.0/`。打包脚本拒绝覆盖已有附件；旧版本和标签继续保留。
+源码启动：`run.cmd`。构建输出：`dist/ygui.exe`。版本附件：`release-files/0.4.1/`。打包脚本拒绝覆盖已有附件；旧版本和标签继续保留。
 
 CI 工作流模板位于 `docs/workflow-templates/`，启用时移入 `.github/workflows/`。介绍页由根目录 `index.html` 和 `website/` 静态资源组成，可通过 GitHub Pages 从 `main` 的根目录发布。
 

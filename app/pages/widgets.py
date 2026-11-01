@@ -6,7 +6,6 @@ Manages widget creation, deletion, and settings with card sections and context m
 
 import json
 import re
-import time
 import webbrowser
 from ctypes import WinError
 from pathlib import Path
@@ -40,6 +39,7 @@ from core.widget_helpers import (
     parse_yaml,
     save_widget_options,
 )
+from core.widget_management import apply_widget_action
 from core.writing_templates import command_templates
 from core.yasb_schema import make_defaults, validate_options, widget_schemas
 from ui.advanced_editor import create_advanced_editor
@@ -54,14 +54,17 @@ from winrt.windows.foundation import AsyncStatus, IAsyncAction, IAsyncOperation,
 from winrt.windows.ui import Color
 from winui3.microsoft.ui.xaml import FocusState, FrameworkElement, Thickness, Visibility
 from winui3.microsoft.ui.xaml.controls import (
+    AppBarButton,
     Border,
     Button,
+    CheckBox,
     ComboBox,
     ContentDialogButton,
     FontIcon,
     Grid,
     HyperlinkButton,
     InfoBar,
+    InfoBarSeverity,
     MenuFlyout,
     MenuFlyoutItem,
     MenuFlyoutSeparator,
@@ -75,20 +78,7 @@ from winui3.microsoft.ui.xaml.markup import XamlReader
 
 
 def get_widget_registry():
-    """Load widget registry from JSON."""
-    from core.constants import REGISTRY_FILE
-
-    path = REGISTRY_FILE
-    registry = {}
-    if path.exists():
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                widgets_data = data.get("widgets", {})
-                for key, val in widgets_data.items():
-                    registry[key] = SimpleNamespace(**val)
-        except Exception as e:
-            error(f"Failed to load registry: {e}")
+    """Index the selected bundled schema by widget type."""
     current = {}
     for type_path, node in widget_schemas().items():
         key = "widget_" + type_path.rsplit(".", 1)[0].replace(".", "_")
@@ -117,9 +107,16 @@ class WidgetsPage:
         self._widget_panels = {}
         self._section_expanders = {}  # Store expanders by position
         self._disabled_widgets_panel = None
+        self._search_query = ""
+        self._selected_widgets = set()
+        self._visible_widget_names = []
+        self._widget_rows = []
+        self._selection_boxes = {}
+        self._syncing_selection = False
+        self._empty_labels = {}
 
     def reload_registry(self):
-        """Reload widget registry from disk."""
+        """Reload widget metadata for the selected schema profile."""
         self._widget_registry = get_widget_registry()
 
     def show(self):
@@ -134,12 +131,29 @@ class WidgetsPage:
             add_widget_button = content.find_name("AddWidgetButton").as_(Button)
             add_widget_text = content.find_name("AddWidgetText").as_(TextBlock)
             self._sections_panel = content.find_name("SectionsPanel").as_(StackPanel)
+            self._filter_input = content.find_name("WidgetFilter").as_(TextBox)
+            self._filter_count = content.find_name("FilterCount").as_(TextBlock)
+            self._selection_count = content.find_name("SelectionCount").as_(TextBlock)
+            self._batch_status = content.find_name("BatchStatus").as_(InfoBar)
+            self._batch_buttons = {
+                action: content.find_name(name).as_(AppBarButton)
+                for action, name in (
+                    ("select", "SelectVisibleButton"),
+                    ("clear", "ClearSelectionButton"),
+                    ("duplicate", "BatchDuplicateButton"),
+                    ("disable", "BatchDisableButton"),
+                    ("move", "BatchMoveButton"),
+                )
+            }
 
             page_title.text = t("widgets_title")
             select_bar_label.text = t("bars_selection")
             add_widget_text.text = t("widgets_add")
             add_widget_button.add_click(lambda s, e: self._show_add_widget_dialog(None))
 
+            self._selected_widgets.clear()
+            self._widget_panels.clear()
+            self._section_expanders.clear()
             self._create_sections()
 
             bars = self._config_manager.get_bars()
@@ -148,19 +162,34 @@ class WidgetsPage:
             for bar_name in bar_names:
                 bar_selector.items.append(self._ui.create_combobox_item(bar_name))
 
-            self._app._widgets_selected_bar = bar_names[0] if bar_names else None
+            previous_bar = getattr(self._app, "_widgets_selected_bar", None)
+            self._app._widgets_selected_bar = (
+                previous_bar if previous_bar in bars else bar_names[0] if bar_names else None
+            )
+            add_widget_button.is_enabled = bool(bar_names)
+            bar_selector.is_enabled = bool(bar_names)
+            content.find_name("BatchHint").as_(TextBlock).text = t(
+                "widgets_batch_hint" if bar_names else "widgets_batch_no_bar"
+            )
 
             def on_bar_selected(sender, e):
                 idx = bar_selector.selected_index
                 if 0 <= idx < len(bar_names):
                     self._app._widgets_selected_bar = bar_names[idx]
+                    self._selected_widgets.clear()
+                    self._batch_status.is_open = False
                     self._load_widgets()
 
-            bar_selector.add_selection_changed(on_bar_selected)
             self._setup_widget_data()
 
             if bar_selector.items.size > 0:
-                bar_selector.selected_index = 0
+                bar_selector.selected_index = bar_names.index(self._app._widgets_selected_bar)
+            bar_selector.add_selection_changed(on_bar_selected)
+
+            self._setup_batch_controls()
+            self._filter_input.placeholder_text = t("widgets_filter_placeholder")
+            self._filter_input.text = self._search_query
+            self._filter_input.add_text_changed(lambda s, e: self._on_filter_changed())
 
             self._load_widgets()
             self._app._content_area.content = page
@@ -204,6 +233,7 @@ class WidgetsPage:
 
         self._disabled_widgets_panel = self._ui.create_stack_panel(spacing=4)
         disabled_expander.content = self._disabled_widgets_panel
+        self._section_expanders["disabled"] = disabled_expander
 
         self._sections_panel.children.append(disabled_expander)
 
@@ -219,50 +249,43 @@ class WidgetsPage:
         )
 
     def _load_widgets(self):
-        """Load widgets for all positions."""
+        """Build rows once per config change; filtering only changes visibility."""
         try:
             bar_name = self._app._widgets_selected_bar
-            if not bar_name:
-                return
-
-            bar = self._config_manager.get_bar(bar_name)
-            if not bar:
-                return
-
-            widgets_data = bar.get("widgets", {})
+            bar = self._config_manager.get_bar(bar_name) or {}
+            widgets_data = bar.get("widgets") or {}
+            self._widget_rows = []
+            self._selection_boxes = {}
+            self._empty_labels = {}
 
             for position in ["left", "center", "right"]:
                 container = self._widget_panels.get(position)
-                if not container:
+                if container is None:
                     continue
-
+                self._section_expanders[position].visibility = Visibility.VISIBLE if bar_name else Visibility.COLLAPSED
                 container.children.clear()
                 widget_list = widgets_data.get(position) or []
-
-                if not widget_list:
-                    empty_text = self._ui.create_text_block(t("widgets_empty_hint"), None)
-                    empty_text.opacity = 0.6
-                    container.children.append(empty_text)
-                    continue
 
                 for idx, widget_name in enumerate(widget_list):
                     item = self._create_widget_item(widget_name, position, idx, len(widget_list))
                     container.children.append(item)
+                    self._widget_rows.append((widget_name, item, self._widget_search_text(widget_name), position))
+                self._add_empty_label(container, position, "widgets_empty_hint")
 
-            # Load disabled widgets (widgets in config but not in any bar position)
             self._load_disabled_widgets(bar)
+            self._apply_filter()
 
         except Exception as e:
             error(f"Load widgets error: {e}", exc_info=True)
 
     def _load_disabled_widgets(self, bar):
         """Load widgets that exist in config but are not in the current bar."""
-        if not self._disabled_widgets_panel:
+        if self._disabled_widgets_panel is None:
             return
 
         self._disabled_widgets_panel.children.clear()
 
-        widgets_data = bar.get("widgets", {})
+        widgets_data = bar.get("widgets") or {}
         active_widgets = set()
         for position in ["left", "center", "right"]:
             for widget_name in widgets_data.get(position) or []:
@@ -272,49 +295,138 @@ class WidgetsPage:
 
         disabled_widgets = [name for name in all_widgets.keys() if name not in active_widgets]
 
-        if not disabled_widgets:
-            empty_text = self._ui.create_text_block(t("widgets_disabled_empty"), None)
-            empty_text.opacity = 0.6
-            self._disabled_widgets_panel.children.append(empty_text)
-            return
-
         for widget_name in disabled_widgets:
             item = self._create_disabled_widget_item(widget_name)
             self._disabled_widgets_panel.children.append(item)
+            self._widget_rows.append((widget_name, item, self._widget_search_text(widget_name), "disabled"))
+        self._add_empty_label(self._disabled_widgets_panel, "disabled", "widgets_disabled_empty")
+
+    def _add_empty_label(self, panel, position, key):
+        label = self._ui.create_text_block(t(key), None)
+        label.opacity = 0.6
+        panel.children.append(label)
+        self._empty_labels[position] = (label, key)
+
+    def _widget_search_text(self, name):
+        widget = self._config_manager.get_widget(name) or {}
+        type_path = widget.get("type", "")
+        info = self._widget_registry.get(type_path)
+        return " ".join(
+            (name, type_path, getattr(info, "name", ""), getattr(info, "category", t("widgets_custom_category")))
+        ).casefold()
+
+    def _on_filter_changed(self):
+        self._search_query = self._filter_input.text
+        self._selected_widgets.clear()
+        self._batch_status.is_open = False
+        self._apply_filter()
+
+    def _apply_filter(self):
+        terms = self._search_query.casefold().split()
+        visible_names = []
+        visible_positions = set()
+        for name, row, searchable, position in self._widget_rows:
+            visible = all(term in searchable for term in terms)
+            row.visibility = Visibility.VISIBLE if visible else Visibility.COLLAPSED
+            if visible:
+                visible_names.append(name)
+                visible_positions.add(position)
+        self._visible_widget_names = list(dict.fromkeys(visible_names))
+        self._selected_widgets.intersection_update(self._visible_widget_names)
+        self._selected_widgets.intersection_update(self._config_manager.get_widgets() or {})
+        total = len({name for name, *_ in self._widget_rows})
+        self._filter_count.text = t("widgets_filter_count", visible=len(self._visible_widget_names), total=total)
+        for position, (label, key) in self._empty_labels.items():
+            label.text = t("widgets_filter_empty" if terms else key)
+            label.visibility = Visibility.COLLAPSED if position in visible_positions else Visibility.VISIBLE
+            if terms and position in visible_positions:
+                self._section_expanders[position].is_expanded = True
+        self._update_selection_controls()
+
+    def _setup_batch_controls(self):
+        labels = {
+            "select": "widgets_select_visible",
+            "clear": "widgets_clear_selection",
+            "duplicate": "widgets_batch_duplicate",
+            "disable": "widgets_batch_disable",
+            "move": "widgets_batch_move",
+        }
+        for action, key in labels.items():
+            self._batch_buttons[action].label = t(key)
+        self._batch_buttons["select"].add_click(lambda s, e: self._select_visible_widgets())
+        self._batch_buttons["clear"].add_click(lambda s, e: self._clear_widget_selection())
+        self._batch_buttons["duplicate"].add_click(lambda s, e: self._apply_batch_action("duplicate"))
+        self._batch_buttons["disable"].add_click(lambda s, e: self._apply_batch_action("disable"))
+        menu = MenuFlyout()
+        for position in ("left", "center", "right"):
+            item = MenuFlyoutItem()
+            item.text = t("widgets_" + position)
+            item.add_click(lambda s, e, p=position: self._apply_batch_action("move", p))
+            menu.items.append(item)
+        self._batch_buttons["move"].flyout = menu
+
+    def _select_visible_widgets(self):
+        self._selected_widgets = set(self._visible_widget_names).intersection(self._config_manager.get_widgets() or {})
+        self._update_selection_controls()
+
+    def _clear_widget_selection(self):
+        self._selected_widgets.clear()
+        self._update_selection_controls()
+
+    def _set_widget_selected(self, name, selected):
+        if self._syncing_selection:
+            return
+        if selected:
+            self._selected_widgets.add(name)
+        else:
+            self._selected_widgets.discard(name)
+        self._update_selection_controls()
+
+    def _update_selection_controls(self):
+        self._syncing_selection = True
+        try:
+            for name, boxes in self._selection_boxes.items():
+                for box in boxes:
+                    box.is_checked = name in self._selected_widgets
+        finally:
+            self._syncing_selection = False
+        selected = bool(self._selected_widgets)
+        has_bar = self._app._widgets_selected_bar is not None
+        active_names = {name for name, _, _, position in self._widget_rows if position != "disabled"}
+        self._selection_count.text = t("widgets_selected_count", count=len(self._selected_widgets))
+        self._batch_buttons["select"].is_enabled = bool(
+            set(self._visible_widget_names).intersection(self._config_manager.get_widgets() or {})
+        )
+        self._batch_buttons["clear"].is_enabled = selected
+        self._batch_buttons["duplicate"].is_enabled = selected
+        self._batch_buttons["disable"].is_enabled = has_bar and bool(self._selected_widgets.intersection(active_names))
+        self._batch_buttons["move"].is_enabled = selected and has_bar
+
+    def _apply_batch_action(self, action, position=None):
+        names = [name for name in self._visible_widget_names if name in self._selected_widgets]
+        if not names:
+            return
+        try:
+            changed = apply_widget_action(
+                self._config_manager, self._app._widgets_selected_bar, names, action, position
+            )
+        except ValueError as exc:
+            self._batch_status.severity = InfoBarSeverity.ERROR
+            self._batch_status.message = t("widgets_batch_error", error=str(exc))
+        else:
+            self._batch_status.severity = InfoBarSeverity.SUCCESS if changed else InfoBarSeverity.INFORMATIONAL
+            self._batch_status.message = (
+                t("widgets_batch_done", count=len(changed)) if changed else t("widgets_batch_no_change")
+            )
+            if changed:
+                self._selected_widgets.clear()
+                self._app.mark_unsaved()
+                self._load_widgets()
+        self._batch_status.is_open = True
 
     def _create_disabled_widget_item(self, widget_name):
         """Create a disabled widget item with dimmed appearance."""
-        widget = self._config_manager.get_widget(widget_name)
-        widget_type = widget.get("type", "unknown") if widget else "unknown"
-
-        category = t("widgets_custom_category")
-        description = ""
-        for wid, info in self._widget_registry.items():
-            if info.type_path == widget_type:
-                category = info.category
-                description = info.description
-                break
-
-        subtext = f"{category} · {description}" if description else category
-
-        btn_xaml = f'''<Button xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                        Padding="12,8" Opacity="0.7">
-            <StackPanel Spacing="2">
-                <TextBlock Text="{UIFactory.escape_xml(widget_name)}" FontWeight="SemiBold"/>
-                <TextBlock Text="{UIFactory.escape_xml(subtext)}" FontSize="11" Opacity="0.6" TextWrapping="Wrap"/>
-            </StackPanel>
-        </Button>'''
-        btn = XamlReader.load(btn_xaml).as_(Button)
-        btn.margin = Thickness(4, 2, 4, 2)
-        instrument_button(btn, card=True)
-
-        menu = self._create_disabled_widget_context_menu(widget_name)
-        btn.context_flyout = menu
-
-        btn.add_click(lambda s, e, name=widget_name: self._show_edit_widget_dialog(name, None))
-
-        return btn
+        return self._create_widget_item(widget_name, None, 0, 1)
 
     def _create_disabled_widget_context_menu(self, widget_name):
         """Create context menu for a disabled widget."""
@@ -334,6 +446,7 @@ class WidgetsPage:
             add_item = MenuFlyoutItem()
             add_item.text = f"{t('widgets_add_to')} {pos_label}"
             add_item.icon = self._create_icon(move_icons.get(pos_key, "&#xE710;"))
+            add_item.is_enabled = self._app._widgets_selected_bar is not None
             add_item.add_click(lambda s, e, p=pos_key, n=widget_name: self._enable_widget(n, p))
             menu.items.append(add_item)
 
@@ -346,6 +459,12 @@ class WidgetsPage:
         menu.items.append(edit_item)
 
         self._add_apps_yaml_menu(menu, widget_name)
+
+        duplicate_item = MenuFlyoutItem()
+        duplicate_item.text = t("widgets_duplicate")
+        duplicate_item.icon = self._create_icon("&#xE8C8;")
+        duplicate_item.add_click(lambda s, e: self._duplicate_widget(widget_name, None))
+        menu.items.append(duplicate_item)
 
         form_item = MenuFlyoutItem()
         form_item.text = t("widgets_form_editor")
@@ -383,15 +502,22 @@ class WidgetsPage:
         widget = self._config_manager.get_widget(widget_name)
         widget_type = widget.get("type", "unknown") if widget else "unknown"
 
-        category, description = t("widgets_custom_category"), ""
-        for wid, info in self._widget_registry.items():
-            if info.type_path == widget_type:
-                category, description = info.category, info.description
-                break
+        info = self._widget_registry.get(widget_type)
+        category = getattr(info, "category", t("widgets_custom_category"))
+        description = getattr(info, "description", "")
 
-        container = XamlReader.load(load_xaml("components/WidgetItemRow.xaml")).as_(Grid)
+        row_xaml = load_xaml("components/WidgetItemRow.xaml").format(
+            select_label=UIFactory.escape_xml(t("widgets_select_item", name=widget_name))
+        )
+        container = XamlReader.load(row_xaml).as_(Grid)
         container.find_name("NameText").as_(TextBlock).text = widget_name
         container.find_name("SubText").as_(TextBlock).text = f"{category} · {description}" if description else category
+        checkbox = container.find_name("SelectCheckBox").as_(CheckBox)
+        checkbox.is_enabled = widget is not None
+        checkbox.is_checked = widget_name in self._selected_widgets
+        checkbox.add_checked(lambda s, e: self._set_widget_selected(widget_name, True))
+        checkbox.add_unchecked(lambda s, e: self._set_widget_selected(widget_name, False))
+        self._selection_boxes.setdefault(widget_name, []).append(checkbox)
 
         main_btn = container.find_name("MainButton").as_(Button)
         main_btn.margin = Thickness(4, 2, 4, 2)
@@ -401,6 +527,12 @@ class WidgetsPage:
         down_btn = container.find_name("DownButton").as_(Button)
         instrument_button(up_btn)
         instrument_button(down_btn)
+
+        if position is None:
+            main_btn.opacity = 0.7
+            main_btn.context_flyout = self._create_disabled_widget_context_menu(widget_name)
+            up_btn.visibility = down_btn.visibility = Visibility.COLLAPSED
+            return container
 
         main_btn.context_flyout = self._create_widget_context_menu(widget_name, position, index, total)
 
@@ -632,11 +764,7 @@ class WidgetsPage:
 
             show_apps_editor(self._app, widget.get("options", {}), apply, self._load_widgets)
             return
-        doc_link = ""
-        for wid, info in self._widget_registry.items():
-            if info.type_path == widget_type:
-                doc_link = getattr(info, "doc_link", "")
-                break
+        doc_link = getattr(self._widget_registry.get(widget_type), "doc_link", "")
 
         self._show_widget_editor_dialog(
             widget_name=widget_name,
@@ -814,13 +942,11 @@ class WidgetsPage:
                 monaco_theme = editor_theme
 
             # Store editor state
-            editor_state = {"content": options_text, "editor_ready": False, "loader_start_time": None}
+            editor_state = {"content": options_text, "editor_ready": False}
 
             def init_editor_content():
                 """Initialize editor with content after Monaco is ready."""
                 try:
-                    start_time = editor_state.get("loader_start_time") or time.time()
-                    elapsed = time.time() - start_time
                     init_options = {
                         "theme": monaco_theme,
                         "language": "yaml",
@@ -828,8 +954,6 @@ class WidgetsPage:
                         "fontSize": editor_font_size,
                         "content": options_text,
                         "focus": True,
-                        "elapsedMs": int(elapsed * 1000),
-                        "minTotalMs": 1000,
                         "editorOptions": editor_options(),
                     }
                     webview.execute_script_async(f"initEditor({json.dumps(init_options)})")
@@ -893,7 +1017,6 @@ class WidgetsPage:
 
             def on_dialog_opened(sender, args):
                 """Called when dialog is opened - initialize WebView2 properly."""
-                editor_state["loader_start_time"] = time.time()
                 env_op = CoreWebView2Environment.create_with_options_async("", WEBVIEW_CACHE_DIR, None)
 
                 def on_env_created(op: IAsyncOperation, status: AsyncStatus):

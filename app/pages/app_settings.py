@@ -671,7 +671,9 @@ class AppSettingsPage:
                     """Update progress bar from background thread."""
 
                     def update_progress():
-                        progress_bar.value = (current / total) * 100
+                        progress_bar.is_indeterminate = total <= 0
+                        if total > 0:
+                            progress_bar.value = (current / total) * 100
 
                     self._app._window.dispatcher_queue.try_enqueue(update_progress)
 
@@ -788,7 +790,8 @@ class AppSettingsPage:
 
         if available_update:
             version, url = available_update
-            release_url = f"https://github.com/amnweb/yasb-gui/releases/tag/v{version}"
+            release_url = f"{GITHUB_YASB_GUI}/releases/tag/v{version}"
+            installable = app_updater.can_install_update(url)
 
             # Release notes button (left)
             notes_btn = HyperlinkButton()
@@ -798,12 +801,14 @@ class AppSettingsPage:
 
             # Install button (right)
             install_btn = self._ui.create_styled_button(
-                t("settings_download_update"), style="AccentButtonStyle", padding="12,6"
+                t("settings_download_update" if installable else "settings_download_portable"),
+                style="AccentButtonStyle",
+                padding="12,6",
             )
             install_btn.min_width = 140
             buttons_panel.children.append(install_btn)
 
-            description = t("settings_update_available")
+            description = t("settings_update_available" if installable else "settings_update_portable_available")
         else:
             # Check button
             check_btn = self._ui.create_styled_button(t("settings_check_updates"), padding="12,6")
@@ -846,11 +851,6 @@ class AppSettingsPage:
                     progress_bar.show_error = False
 
                     def do_check():
-                        import time
-
-                        # Show progress for 3 seconds before checking
-                        time.sleep(3)
-
                         # Check for updates (skip rate limit for manual checks)
                         success, message, version, url = app_updater.check_for_update(skip_rate_limit=True)
 
@@ -870,7 +870,7 @@ class AppSettingsPage:
                                 self.show()
                             else:
                                 # Just update timestamp text
-                                desc_text.text = self._get_last_check_time()
+                                desc_text.text = self._get_last_check_time() if success else message
 
                         self._app._window.dispatcher_queue.try_enqueue(update_ui)
 
@@ -891,6 +891,9 @@ class AppSettingsPage:
                 """Handle download and install button click."""
                 try:
                     version, url = available_update
+                    if not app_updater.can_install_update(url):
+                        webbrowser.open(url)
+                        return
                     install_btn.is_enabled = False
                     if notes_btn:
                         notes_btn.is_enabled = False
@@ -901,10 +904,6 @@ class AppSettingsPage:
                     progress_bar.is_indeterminate = True
 
                     def do_download():
-                        import time
-
-                        time.sleep(1)  # Brief delay before starting download
-
                         # Switch to determinate progress
                         def start_download_progress():
                             progress_bar.is_indeterminate = False

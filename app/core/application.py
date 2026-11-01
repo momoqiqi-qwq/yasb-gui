@@ -271,6 +271,8 @@ class ConfiguratorApp(Application, IXamlMetadataProvider):
         if widget_schemas():
             self._widgets_page.reload_registry()
             self._show_initial_content()
+            if IS_EXECUTABLE:
+                self._check_app_updates_background()
             return
         # Check files existence
         if not is_database_valid() or not updater.is_registry_present():

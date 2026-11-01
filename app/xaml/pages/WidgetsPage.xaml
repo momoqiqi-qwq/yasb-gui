@@ -24,6 +24,22 @@
                         </Button>
                     </StackPanel>
                 </Grid>
+                <TextBox x:Name="WidgetFilter" HorizontalAlignment="Stretch"/>
+                <TextBlock x:Name="FilterCount" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                <CommandBar DefaultLabelPosition="Right" IsDynamicOverflowEnabled="True">
+                    <CommandBar.Content>
+                        <TextBlock x:Name="SelectionCount" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                    </CommandBar.Content>
+                    <AppBarButton x:Name="SelectVisibleButton" Icon="SelectAll"/>
+                    <AppBarButton x:Name="ClearSelectionButton" Icon="ClearSelection"/>
+                    <AppBarSeparator/>
+                    <AppBarButton x:Name="BatchDuplicateButton" Icon="Copy"/>
+                    <AppBarButton x:Name="BatchDisableButton" Icon="Cancel"/>
+                    <AppBarButton x:Name="BatchMoveButton" Icon="MoveToFolder"/>
+                </CommandBar>
+                <TextBlock x:Name="BatchHint" TextWrapping="Wrap" FontSize="12"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                <InfoBar x:Name="BatchStatus" IsOpen="False" IsClosable="True"/>
                 <StackPanel x:Name="SectionsPanel" Spacing="4"/>
             </StackPanel>
         </Grid>

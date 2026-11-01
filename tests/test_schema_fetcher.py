@@ -16,6 +16,7 @@ from core.schema_fetcher import (
     _build_key_hierarchy,
     _extract_widget_option_schemas,
     get_all_widget_types,
+    get_schema_db_path,
     get_widget_key_hierarchy,
     get_widget_schema,
     load_schema_database,
@@ -28,14 +29,18 @@ def temp_schema_db(tmp_path, monkeypatch):
     """Create temporary schema database path."""
     db_path = tmp_path / "widget_schemas.json"
     monkeypatch.setattr("core.schema_fetcher.SCHEMA_DB_PATH", db_path)
-    return db_path
+    return get_schema_db_path()
 
 
 @pytest.fixture
 def sample_schema_db(temp_schema_db):
     """Create a sample schema database."""
     data = {
-        "_meta": {"version": 1, "source": "test"},
+        "_meta": {
+            "version": 2,
+            "profile": "stable",
+            "source": "https://raw.githubusercontent.com/amnweb/yasb/v2.0.7/schema.json",
+        },
         "widgets": {
             "yasb.clock.ClockWidget": {
                 "hierarchy": {
@@ -95,7 +100,7 @@ class TestDatabaseOperations:
         result = save_schema_database({"test": "data"})
 
         assert result is True
-        assert nested_path.exists()
+        assert get_schema_db_path().exists()
 
 
 # --- Schema Querying ---

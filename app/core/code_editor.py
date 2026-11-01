@@ -426,7 +426,7 @@ def parse_yaml(text: str) -> tuple[dict | None, str | None]:
             return {}, None
         if not isinstance(parsed, dict):
             return None, "YAML must be a mapping/dictionary"
-        return dict(parsed), None
+        return parsed, None
     except YAMLError as e:
         error_msg = str(e)
         if hasattr(e, "problem_mark") and e.problem_mark:
