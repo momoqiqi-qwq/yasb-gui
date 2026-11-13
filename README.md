@@ -8,7 +8,7 @@
 
 </div>
 
-<details>
+<details open>
 <summary><b>目录</b></summary>
 
 - [可以做什么](#可以做什么)
@@ -19,6 +19,8 @@
 - [上游与许可](#上游与许可)
 
 </details>
+
+---
 
 ---
 
