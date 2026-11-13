@@ -1,12 +1,14 @@
 <div align="center">
 
-<img src="./assets/readme-hero.svg" alt="yasb-gui" width="1000" />
+<img src="./assets/hero.svg" alt="yasb-gui" width="1000" />
 
 **YASB 图形配置器中文增强版**
 
 [![stars](https://img.shields.io/github/stars/momoqiqi-qwq/yasb-gui?style=for-the-badge&color=f5c518&labelColor=2b2b2b)](https://github.com/momoqiqi-qwq/yasb-gui/stargazers) ![license](https://img.shields.io/github/license/momoqiqi-qwq/yasb-gui?style=for-the-badge&color=3da639) ![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-0078D4?style=for-the-badge&logo=windows&logoColor=white)
 
 </div>
+
+---
 
 <details open>
 <summary><b>目录</b></summary>
