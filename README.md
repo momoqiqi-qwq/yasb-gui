@@ -1,3 +1,27 @@
+<div align="center">
+
+<img src="./assets/readme-hero.svg" alt="yasb-gui" width="1000" />
+
+**YASB 图形配置器中文增强版**
+
+[![stars](https://img.shields.io/github/stars/momoqiqi-qwq/yasb-gui?style=for-the-badge&color=f5c518&labelColor=2b2b2b)](https://github.com/momoqiqi-qwq/yasb-gui/stargazers) ![license](https://img.shields.io/github/license/momoqiqi-qwq/yasb-gui?style=for-the-badge&color=3da639) ![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-0078D4?style=for-the-badge&logo=windows&logoColor=white)
+
+</div>
+
+<details>
+<summary><b>目录</b></summary>
+
+- [可以做什么](#可以做什么)
+- [下载与运行](#下载与运行)
+- [v0.2.0 更新](#v020-更新)
+- [兼容性与当前限制](#兼容性与当前限制)
+- [源码运行与构建](#源码运行与构建)
+- [上游与许可](#上游与许可)
+
+</details>
+
+---
+
 # YASB GUI 中文增强版
 
 **用中文编辑 YASB 状态栏、组件与样式，保留直接编写配置的自由。**
